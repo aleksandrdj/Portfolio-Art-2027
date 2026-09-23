@@ -15,23 +15,22 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       id="main-header"
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ease-out select-none px-6 py-6 md:px-12 md:py-8 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ease-out select-none px-6 py-4 md:px-12 md:py-6 ${
         isVisible
           ? 'opacity-100 translate-y-0 pointer-events-auto'
           : 'opacity-0 -translate-y-2 pointer-events-none'
       }`}
       aria-hidden={!isVisible}
-      tabIndex={isVisible ? 0 : -1}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Left: Brand typography */}
+        {/* Left: Brand typography with semantic heading */}
         <div className="flex items-center">
-          <span
+          <h1
             id="brand-name"
             className="text-neutral-900 tracking-[-0.02em] font-medium text-sm md:text-base font-sans"
           >
             ArtDeejay
-          </span>
+          </h1>
         </div>
 
         {/* Right: Inactive nav items + language toggle */}
@@ -62,36 +61,36 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
 
-          {/* Language Switcher RU / EN */}
+          {/* Language Switcher RU / EN with 44x44px touch targets and visible focus */}
           <div
             id="language-switcher"
-            className="flex items-center space-x-1.5 text-xs md:text-sm font-mono tracking-wider pl-1 md:pl-2"
+            className="flex items-center text-xs md:text-sm font-mono tracking-wider"
           >
             <button
               id="lang-btn-ru"
               type="button"
               disabled={!isVisible}
               onClick={() => onLanguageChange('ru')}
-              className={`transition-colors duration-200 cursor-pointer ${
+              className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 rounded ${
                 language === 'ru'
                   ? 'text-neutral-950 font-semibold'
-                  : 'text-neutral-400 hover:text-neutral-700 font-normal'
+                  : 'text-neutral-500 hover:text-neutral-900 font-normal'
               }`}
               aria-label="Переключить на русский язык"
               aria-pressed={language === 'ru'}
             >
               RU
             </button>
-            <span className="text-neutral-300 select-none">/</span>
+            <span className="text-neutral-300 select-none px-0.5" aria-hidden="true">/</span>
             <button
               id="lang-btn-en"
               type="button"
               disabled={!isVisible}
               onClick={() => onLanguageChange('en')}
-              className={`transition-colors duration-200 cursor-pointer ${
+              className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 rounded ${
                 language === 'en'
                   ? 'text-neutral-950 font-semibold'
-                  : 'text-neutral-400 hover:text-neutral-700 font-normal'
+                  : 'text-neutral-500 hover:text-neutral-900 font-normal'
               }`}
               aria-label="Switch to English"
               aria-pressed={language === 'en'}

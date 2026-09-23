@@ -135,7 +135,16 @@ export function createFBO(
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
 
-  // Clear with 0.0 values initially as mandated
+  // Validate framebuffer completeness
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(framebuffer);
+    gl.deleteTexture(texture);
+    throw new Error(`Framebuffer incomplete: 0x${status.toString(16)}`);
+  }
+
+  // Clear with 0.0 values initially
   gl.clearColor(0.0, 0.0, 0.0, 0.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -169,8 +178,29 @@ export function resizeFBO(
     null
   );
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.framebuffer);
+  
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    console.warn(`Framebuffer resize incomplete: 0x${status.toString(16)}`);
+  }
+
   gl.clearColor(0.0, 0.0, 0.0, 0.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.bindTexture(gl.TEXTURE_2D, null);
+}
+
+/**
+ * Creates a neutral 1x1 zero-velocity texture for fallbacks or uninitialized passes.
+ */
+export function createZeroTexture(gl: WebGL2RenderingContext): WebGLTexture {
+  const tex = gl.createTexture();
+  if (!tex) throw new Error('Failed to create zero texture');
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  const zeroPixel = new Uint8Array([0, 0, 0, 0]);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, zeroPixel);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+  return tex;
 }

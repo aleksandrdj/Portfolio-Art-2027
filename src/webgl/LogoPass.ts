@@ -1,21 +1,23 @@
-import { LOGO_FILLED_PATH, LOGO_VIEWBOX } from '../data/logoData';
+import { LOGO_FILLED_PATH } from '../data/logoData';
+import { computeLogoLayout, ORIGINAL_VIEWBOX } from '../utils/layout';
 import { createProgram } from './webglUtils';
 
 const VS_LOGO = /* glsl */ `#version 300 es
 layout(location = 0) in vec2 a_position;
 layout(location = 1) in vec2 a_uv;
 
-uniform vec4 u_rect; // [x, y, w, h] in pixels from bottom-left
-uniform vec2 u_resolution; // viewport [width, height] in pixels
-uniform vec2 u_parallax; // parallax offset in pixels
+uniform vec4 u_rect; // [x, y, w, h] in physical pixels from bottom-left
+uniform vec2 u_resolution; // viewport [width, height] in physical pixels
+uniform vec2 u_parallax; // parallax offset in physical pixels
 uniform vec2 u_rotation; // [rotX, rotY] in radians
+uniform float u_dpr;
 
 out vec2 v_uv;
 
 void main() {
   v_uv = a_uv;
 
-  // Local quad [0, 1] relative to center
+  // Local quad [0, 1] relative to center in physical pixels
   vec2 localOffset = (a_position - 0.5) * u_rect.zw;
 
   // 3D rotation
@@ -29,16 +31,17 @@ void main() {
   vec3 pRotY = vec3(p.x * cy + p.z * sy, p.y, -p.x * sy + p.z * cy);
   vec3 pRot = vec3(pRotY.x, pRotY.y * cx - pRotY.z * sx, pRotY.y * sx + pRotY.z * cx);
 
-  // Perspective projection with focal distance d = 1200.0 px
+  // Perspective projection with focal distance d = 1200.0 CSS px scaled by DPR
+  float focalDistance = 1200.0 * max(u_dpr, 1.0);
   float z = pRot.z;
-  float persp = 1.0 / max(1.0 - z / 1200.0, 0.1);
+  float persp = 1.0 / max(1.0 - z / focalDistance, 0.1);
   vec2 projectedOffset = pRot.xy * persp;
 
-  // Final screen pixel position
+  // Final screen physical pixel position
   vec2 centerPixel = u_rect.xy + 0.5 * u_rect.zw + u_parallax;
   vec2 pixelPos = centerPixel + projectedOffset;
 
-  // Pixel position to NDC [-1, 1]
+  // Physical pixel position to NDC [-1, 1]
   vec2 ndc = (pixelPos / u_resolution) * 2.0 - 1.0;
 
   gl_Position = vec4(ndc, 0.0, 1.0);
@@ -69,12 +72,17 @@ void main() {
   // Screen UV for perfectly aligned fluid mask sampling
   vec2 screenUV = gl_FragCoord.xy / u_resolution;
 
-  // Fluid velocity & mask derivation
+  // Fluid velocity & mask derivation matching BackgroundField formula
   vec2 v = texture(u_velocity, screenUV).xy;
   float speed = length(v);
-  float mask = smoothstep(0.08, 0.40, speed);
+  vec3 encoded = vec3(v * 0.5 + 0.5, 1.0);
+  vec3 flowColor = mix(vec3(1.0), encoded, speed);
 
-  // Logo color: black in normal state, inverted white inside the liquid mask
+  float signal = 1.0 - flowColor.r;
+  float aa = max(fwidth(signal), 0.001);
+  float mask = smoothstep(0.1 - aa, 0.1 + aa, signal);
+
+  // Logo color: #111111 in normal state, inverted white inside the liquid mask
   vec3 whiteLogo = vec3(1.0, 1.0, 1.0);
   vec3 logoColor = mix(u_baseLogoColor, whiteLogo, mask);
 
@@ -85,7 +93,8 @@ void main() {
 export class LogoPass {
   private gl: WebGL2RenderingContext;
   private program: WebGLProgram;
-  private logoTexture: WebGLTexture | null = null;
+  public logoTexture: WebGLTexture | null = null;
+  public isTextureReady = false;
   private vao: WebGLVertexArrayObject;
   private buffer: WebGLBuffer;
 
@@ -93,34 +102,35 @@ export class LogoPass {
   private locResolution: WebGLUniformLocation | null = null;
   private locParallax: WebGLUniformLocation | null = null;
   private locRotation: WebGLUniformLocation | null = null;
-  private locLogoTex: WebGLUniformLocation | null = null;
-  private locVelocity: WebGLUniformLocation | null = null;
+  private locDpr: WebGLUniformLocation | null = null;
   private locOpacity: WebGLUniformLocation | null = null;
   private locBaseLogoColor: WebGLUniformLocation | null = null;
+  private locLogoTex: WebGLUniformLocation | null = null;
+  private locVelocity: WebGLUniformLocation | null = null;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
-
     this.program = createProgram(gl, VS_LOGO, FS_LOGO);
+
     this.locRect = gl.getUniformLocation(this.program, 'u_rect');
     this.locResolution = gl.getUniformLocation(this.program, 'u_resolution');
     this.locParallax = gl.getUniformLocation(this.program, 'u_parallax');
     this.locRotation = gl.getUniformLocation(this.program, 'u_rotation');
-    this.locLogoTex = gl.getUniformLocation(this.program, 'u_logoTex');
-    this.locVelocity = gl.getUniformLocation(this.program, 'u_velocity');
+    this.locDpr = gl.getUniformLocation(this.program, 'u_dpr');
     this.locOpacity = gl.getUniformLocation(this.program, 'u_opacity');
     this.locBaseLogoColor = gl.getUniformLocation(this.program, 'u_baseLogoColor');
+    this.locLogoTex = gl.getUniformLocation(this.program, 'u_logoTex');
+    this.locVelocity = gl.getUniformLocation(this.program, 'u_velocity');
 
-    // Quad geometry [0, 1] x [0, 1]
     const vao = gl.createVertexArray();
-    if (!vao) throw new Error('Failed to create VAO for logo');
-    this.vao = vao;
-    gl.bindVertexArray(vao);
+    const buf = gl.createBuffer();
+    if (!vao || !buf) throw new Error('Failed to create VAO/Buffer for LogoPass');
 
-    const buffer = gl.createBuffer();
-    if (!buffer) throw new Error('Failed to create logo buffer');
-    this.buffer = buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    this.vao = vao;
+    this.buffer = buf;
+
+    gl.bindVertexArray(this.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
 
     // Quad in [0, 1] with bottom-left at (0, 0)
     const verts = new Float32Array([
@@ -147,20 +157,20 @@ export class LogoPass {
   private generateLogoTexture() {
     const gl = this.gl;
     const canvas = document.createElement('canvas');
-    // High-resolution rasterization of the original SVG geometry
+    // High-resolution rasterization based on original viewBox 1920x787
     canvas.width = 2048;
-    canvas.height = Math.round(2048 * (420 / 1000)); // 860
+    canvas.height = Math.round(2048 / ORIGINAL_VIEWBOX.aspectRatio); // 840 px
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Render path directly from original SVG data
-    const scale = canvas.width / 1000;
+    const scale = canvas.width / ORIGINAL_VIEWBOX.width;
     ctx.scale(scale, scale);
     ctx.fillStyle = '#FFFFFF'; // White silhouette texture; fragment shader colors it
     const p = new Path2D(LOGO_FILLED_PATH);
-    ctx.fill(p);
+    ctx.fill(p, 'evenodd');
 
     const texture = gl.createTexture();
     if (!texture) return;
@@ -176,12 +186,15 @@ export class LogoPass {
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.bindTexture(gl.TEXTURE_2D, null);
+
+    this.isTextureReady = true;
   }
 
   public render(
     velocityTex: WebGLTexture | null,
-    viewportWidth: number,
-    viewportHeight: number,
+    cssWidth: number,
+    cssHeight: number,
+    dpr: number,
     parallax: [number, number],
     rotation: [number, number] = [0, 0],
     opacity: number = 1.0,
@@ -190,15 +203,10 @@ export class LogoPass {
     if (!this.logoTexture || opacity <= 0.001) return;
 
     const gl = this.gl;
+    const layout = computeLogoLayout(cssWidth, cssHeight, dpr);
 
-    // Calculate logo size on screen matching layout:
-    // w-[82vw] md:w-[50vw] max-w-[850px] aspect-[1000/420]
-    let logoW = viewportWidth * (viewportWidth >= 768 ? 0.5 : 0.82);
-    if (logoW > 850) logoW = 850;
-    const logoH = logoW * (420 / 1000);
-
-    const logoX = (viewportWidth - logoW) * 0.5;
-    const logoY = (viewportHeight - logoH) * 0.5;
+    // WebGL Y-axis is from bottom-up; compute bottom-left Y coordinate
+    const logoBottomPx = (cssHeight - (layout.topCss + layout.heightCss)) * dpr;
 
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
@@ -214,10 +222,14 @@ export class LogoPass {
     gl.bindTexture(gl.TEXTURE_2D, velocityTex);
     gl.uniform1i(this.locVelocity, 1);
 
-    gl.uniform4f(this.locRect, logoX, logoY, logoW, logoH);
-    gl.uniform2f(this.locResolution, viewportWidth, viewportHeight);
-    gl.uniform2f(this.locParallax, parallax[0], parallax[1]);
+    const physicalWidth = cssWidth * dpr;
+    const physicalHeight = cssHeight * dpr;
+
+    gl.uniform4f(this.locRect, layout.leftPx, logoBottomPx, layout.widthPx, layout.heightPx);
+    gl.uniform2f(this.locResolution, physicalWidth, physicalHeight);
+    gl.uniform2f(this.locParallax, parallax[0] * dpr, parallax[1] * dpr);
     gl.uniform2f(this.locRotation, rotation[0], rotation[1]);
+    gl.uniform1f(this.locDpr, dpr);
     gl.uniform1f(this.locOpacity, opacity);
     gl.uniform3f(this.locBaseLogoColor, baseColor[0], baseColor[1], baseColor[2]);
 
@@ -234,5 +246,6 @@ export class LogoPass {
     gl.deleteProgram(this.program);
     gl.deleteVertexArray(this.vao);
     gl.deleteBuffer(this.buffer);
+    this.isTextureReady = false;
   }
 }
