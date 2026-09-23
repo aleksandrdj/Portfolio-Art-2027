@@ -30,7 +30,11 @@ export const CentralLogo: React.FC<Props> = ({ appState, prefersReducedMotion, s
     let last = start;
     const update = (now: number) => {
       const p = Math.min(1, Math.max(0, scrollProgressRef?.current ?? 0));
-      const fade = prefersReducedMotion ? 1 : 1 - Math.pow(1 - Math.min(1, (now - start) / 1400), 3);
+      // Soft opacity ramp; the small zoom starts briskly and settles without overshoot.
+      const entrance = prefersReducedMotion ? 1 : Math.min(1, Math.max(0, (now - start - 100) / 1500));
+      const fade = entrance * entrance * (3 - 2 * entrance);
+      const zoomEase = 1 - Math.pow(1 - entrance, 3);
+      const entranceScale = 0.94 + 0.06 * zoomEase;
       const follow = 1 - Math.exp(-Math.min(now - last, 50) / 100);
       last = now;
       current.x += (target.x - current.x) * follow;
@@ -41,7 +45,7 @@ export const CentralLogo: React.FC<Props> = ({ appState, prefersReducedMotion, s
         const scale = (60 + (end - 60) * p) / 60;
         // Keep the original ink legible while allowing the signature to take focus.
         frame.current.style.opacity = String(1 - 0.68 * Math.min(1, Math.max(0, (p - 0.28) / 0.5)));
-        frame.current.style.transform = `perspective(1200px) rotateX(${-current.y * 2 * (1-p)}deg) rotateY(${current.x * 3 * (1-p)}deg) scale(${scale})`;
+        frame.current.style.transform = `perspective(1200px) rotateX(${-current.y * 2 * (1-p)}deg) rotateY(${current.x * 3 * (1-p)}deg) scale(${scale * entranceScale})`;
       }
       raf = requestAnimationFrame(update);
     };
