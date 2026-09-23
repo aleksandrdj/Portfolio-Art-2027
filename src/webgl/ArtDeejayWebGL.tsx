@@ -5,11 +5,13 @@ import { FluidMaskPass } from './FluidMaskPass';
 import { FluidSimulation } from './FluidSimulation';
 import { IdleController } from './IdleController';
 import { LogoPass } from './LogoPass';
+import { SiluetPass } from './SiluetPass';
 import { createZeroTexture } from './webglUtils';
 
 interface ArtDeejayWebGLProps {
   appState: AppState;
   prefersReducedMotion: boolean;
+  scrollProgressRef?: React.MutableRefObject<number>;
   onWebGLReady?: (ready: boolean) => void;
   onFirstReadyFrame?: () => void;
 }
@@ -17,6 +19,7 @@ interface ArtDeejayWebGLProps {
 export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
   appState,
   prefersReducedMotion,
+  scrollProgressRef,
   onWebGLReady,
   onFirstReadyFrame,
 }) => {
@@ -28,6 +31,9 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
 
   const prefersReducedMotionRef = useRef<boolean>(prefersReducedMotion);
   prefersReducedMotionRef.current = prefersReducedMotion;
+
+  const scrollProgressRefInternal = useRef<React.MutableRefObject<number> | undefined>(scrollProgressRef);
+  scrollProgressRefInternal.current = scrollProgressRef;
 
   const onFirstReadyFrameRef = useRef(onFirstReadyFrame);
   onFirstReadyFrameRef.current = onFirstReadyFrame;
@@ -77,6 +83,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     let fluidSim: FluidSimulation | null = null;
     let fluidMaskPass: FluidMaskPass | null = null;
     let bgField: BackgroundField | null = null;
+    let siluetPass: SiluetPass | null = null;
     let logoPass: LogoPass | null = null;
     let idleController: IdleController | null = null;
     let zeroTex: WebGLTexture | null = null;
@@ -85,6 +92,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       fluidSim = new FluidSimulation(gl, width, height);
       fluidMaskPass = new FluidMaskPass(gl, canvas.width, canvas.height);
       bgField = new BackgroundField(gl);
+      siluetPass = new SiluetPass(gl);
       logoPass = new LogoPass(gl);
       idleController = new IdleController();
       zeroTex = createZeroTexture(gl);
@@ -106,6 +114,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
         fluidSim = new FluidSimulation(gl, width, height);
         fluidMaskPass = new FluidMaskPass(gl, canvas.width, canvas.height);
         bgField = new BackgroundField(gl);
+        siluetPass = new SiluetPass(gl);
         logoPass = new LogoPass(gl);
         idleController = new IdleController();
         zeroTex = createZeroTexture(gl);
@@ -118,11 +127,13 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       fluidSim?.dispose();
       fluidMaskPass?.dispose();
       bgField?.dispose();
+      siluetPass?.dispose();
       logoPass?.dispose();
       if (zeroTex) gl.deleteTexture(zeroTex);
       fluidSim = null;
       fluidMaskPass = null;
       bgField = null;
+      siluetPass = null;
       logoPass = null;
       zeroTex = null;
       idleController = null;
@@ -318,8 +329,11 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
         const fluidMaskTex = fluidMaskPass.render(densityTex, canvas.width, canvas.height);
 
         const simTime = currentReducedMotion ? 0.0 : now * 0.001;
+        const scrollProgress = currentReducedMotion
+          ? 1.0
+          : (scrollProgressRefInternal.current?.current ?? 0.0);
 
-        // 2. BackgroundField: Contours + light gray fluid trail
+        // 2. BackgroundField: Contours + living gradient + fluid trail
         bgField.render(
           fluidMaskTex,
           canvas.width,
@@ -328,10 +342,14 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
           snapshot.mouseNDC,
           snapshot.mousePace,
           bgOpacity,
-          dpr
+          dpr,
+          scrollProgress
         );
 
-        // 3. LogoPass: Original silhouette + parallax + local fluid inversion
+        // 3. SiluetPass: White human silhouette at controlled low opacity (up to 0.10)
+        siluetPass?.render(canvas.width, canvas.height, dpr, scrollProgress);
+
+        // 4. LogoPass: Original silhouette + parallax + local fluid inversion + scroll scaling
         const parallaxCSS: [number, number] = [
           mouseCurrentRef.current.x * 5.0,
           -mouseCurrentRef.current.y * 4.0,
@@ -342,6 +360,11 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
           (mouseCurrentRef.current.x * 4.0 * Math.PI) / 180,
         ];
 
+        // Smooth color transition from #111111 to white as background darkens
+        const logoColorT = Math.min(Math.max((scrollProgress - 0.15) / 0.60, 0), 1);
+        const baseRgb = (17 + (255 - 17) * logoColorT) / 255;
+        const baseColor: [number, number, number] = [baseRgb, baseRgb, baseRgb];
+
         logoPass.render(
           fluidMaskTex,
           width,
@@ -350,7 +373,8 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
           parallaxCSS,
           rotationAngles,
           logoOpacity,
-          [17 / 255, 17 / 255, 17 / 255]
+          baseColor,
+          scrollProgress
         );
 
         // Notify parent only after logoPass texture is ready AND actual rendering succeeded

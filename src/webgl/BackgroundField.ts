@@ -23,6 +23,7 @@ uniform vec2 u_mouseNDC;
 uniform float u_mousePace;
 uniform float u_opacity;
 uniform float u_dpr;
+uniform float u_scrollProgress;
 
 out vec4 fragColor;
 
@@ -65,26 +66,57 @@ void main() {
   float targetPxWidth = 0.85 * max(u_dpr, 1.0);
   float lineAlpha = 1.0 - smoothstep(targetPxWidth * 0.4, targetPxWidth * 0.9, pxDist);
 
-  // Palette:
-  // Background: #FFFFFF
-  // Lines: #E3E4E2
-  // Trail Light: #EEEEEB (slightly darker than white)
-  // Trail Dark:  #DDDFD9
-  vec3 bgColor = vec3(1.0, 1.0, 1.0);
-  vec3 lineColor = vec3(227.0 / 255.0, 228.0 / 255.0, 226.0 / 255.0);
-  vec3 trailLight = vec3(238.0 / 255.0, 238.0 / 255.0, 235.0 / 255.0);
-  vec3 trailDark  = vec3(221.0 / 255.0, 223.0 / 255.0, 217.0 / 255.0);
+  // Living gradient palette (from specification):
+  // Bright cyan-blue: #008CB2 -> vec3(0.0, 140.0 / 255.0, 178.0 / 255.0)
+  // Deep blue:       #005879 -> vec3(0.0, 88.0 / 255.0, 121.0 / 255.0)
+  // Dark blue-green: #063B4B -> vec3(6.0 / 255.0, 59.0 / 255.0, 75.0 / 255.0)
+  vec3 colBright = vec3(0.0, 140.0 / 255.0, 178.0 / 255.0);
+  vec3 colDeep   = vec3(0.0, 88.0 / 255.0, 121.0 / 255.0);
+  vec3 colDark   = vec3(6.0 / 255.0, 59.0 / 255.0, 75.0 / 255.0);
 
-  // Combine background and contours
-  vec3 backgroundWithContours = mix(bgColor, lineColor, lineAlpha * u_opacity);
+  // Slow, meditative drift with natural period ~25-30 seconds (independent of scroll)
+  float tGrad = u_time * 0.035;
 
-  // Read unified fluid mask in exact screen coordinates
-  // screenUV = gl_FragCoord.xy / u_resolution
+  // Gentle wandering color regions
+  vec2 c1 = vec2(0.35 + 0.22 * sin(tGrad * 1.1 + 0.5), 0.75 + 0.16 * cos(tGrad * 0.9));
+  vec2 c2 = vec2(0.70 + 0.25 * cos(tGrad * 0.8 + 1.2), 0.40 + 0.20 * sin(tGrad * 1.05));
+  vec2 c3 = vec2(0.40 + 0.20 * sin(tGrad * 0.7 + 2.5), 0.15 + 0.12 * cos(tGrad * 1.2));
+
+  float d1 = length(uv - c1);
+  float gradNoise = 0.5 + 0.5 * snoise(vec3(uv * 0.75, tGrad * 0.5));
+
+  // Base background distribution: lighter cyan-blue at top/sides, deep blue in middle, dark blue-green at bottom
+  vec3 livingGradient = mix(colDark, colDeep, smoothstep(0.05, 0.75, uv.y));
+  float wBright = smoothstep(0.95, 0.15, d1) * 0.85 + smoothstep(0.3, 1.0, uv.y) * 0.25;
+  livingGradient = mix(livingGradient, colBright, clamp(wBright + gradNoise * 0.15, 0.0, 1.0));
+
+  // Blend from pure white base to living gradient according to scroll progress (0.0 -> 1.0)
+  vec3 baseBg = mix(vec3(1.0, 1.0, 1.0), livingGradient, u_scrollProgress);
+
+  // Topographic lines:
+  // On white: #E3E4E2
+  // On rich gradient: delicate light cyan #8CE8F2
+  vec3 lineWhiteBg = vec3(227.0 / 255.0, 228.0 / 255.0, 226.0 / 255.0);
+  vec3 lineGradientBg = vec3(140.0 / 255.0, 225.0 / 255.0, 240.0 / 255.0);
+  vec3 lineColor = mix(lineWhiteBg, lineGradientBg, u_scrollProgress);
+
+  float currentLineAlpha = lineAlpha * u_opacity * mix(0.85, 0.55, u_scrollProgress);
+  vec3 backgroundWithContours = mix(baseBg, lineColor, currentLineAlpha);
+
+  // Unified fluid mask in exact screen coordinates
   vec2 screenUV = gl_FragCoord.xy / u_resolution;
   float mask = texture(u_fluidMask, screenUV).r;
 
-  // Fluid trail color slightly darker than white background
+  // Fluid trail color slightly darker than white background on light, or soft glow on dark
+  vec3 trailLightWhite = vec3(238.0 / 255.0, 238.0 / 255.0, 235.0 / 255.0);
+  vec3 trailDarkWhite  = vec3(221.0 / 255.0, 223.0 / 255.0, 217.0 / 255.0);
+  vec3 trailLightGrad  = mix(colDeep, colBright, 0.35);
+  vec3 trailDarkGrad   = mix(colDark, colDeep, 0.5);
+
+  vec3 trailLight = mix(trailLightWhite, trailLightGrad, u_scrollProgress);
+  vec3 trailDark  = mix(trailDarkWhite, trailDarkGrad, u_scrollProgress);
   vec3 trailColor = mix(trailLight, trailDark, region);
+
   vec3 finalColor = mix(backgroundWithContours, trailColor, mask * u_opacity);
 
   fragColor = vec4(finalColor, 1.0);
@@ -104,6 +136,7 @@ export class BackgroundField {
   private locMousePace: WebGLUniformLocation | null = null;
   private locOpacity: WebGLUniformLocation | null = null;
   private locDpr: WebGLUniformLocation | null = null;
+  private locScrollProgress: WebGLUniformLocation | null = null;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -119,6 +152,7 @@ export class BackgroundField {
     this.locMousePace = gl.getUniformLocation(this.program, 'u_mousePace');
     this.locOpacity = gl.getUniformLocation(this.program, 'u_opacity');
     this.locDpr = gl.getUniformLocation(this.program, 'u_dpr');
+    this.locScrollProgress = gl.getUniformLocation(this.program, 'u_scrollProgress');
   }
 
   public render(
@@ -129,7 +163,8 @@ export class BackgroundField {
     mouseNDC: [number, number],
     mousePace: number,
     opacity: number,
-    dpr: number
+    dpr: number,
+    scrollProgress: number = 0.0
   ) {
     const gl = this.gl;
     gl.viewport(0, 0, width, height);
@@ -146,6 +181,7 @@ export class BackgroundField {
     gl.uniform1f(this.locMousePace, mousePace);
     gl.uniform1f(this.locOpacity, opacity);
     gl.uniform1f(this.locDpr, dpr);
+    gl.uniform1f(this.locScrollProgress, scrollProgress);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 

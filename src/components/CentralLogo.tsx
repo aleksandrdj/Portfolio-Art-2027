@@ -7,6 +7,7 @@ interface CentralLogoProps {
   prefersReducedMotion: boolean;
   isWebGLActive?: boolean;
   isWebGLReadyFrameDrawn?: boolean;
+  scrollProgressRef?: React.MutableRefObject<number>;
 }
 
 export const CentralLogo: React.FC<CentralLogoProps> = ({
@@ -14,9 +15,11 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
   prefersReducedMotion,
   isWebGLActive = false,
   isWebGLReadyFrameDrawn = false,
+  scrollProgressRef,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const parallaxWrapperRef = useRef<HTMLDivElement | null>(null);
+  const pathRef = useRef<SVGPathElement | null>(null);
 
   // Parallax state for DOM fallback
   const mouseTargetRef = useRef({ x: 0, y: 0 });
@@ -107,6 +110,23 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
 
         parallaxWrapperRef.current.style.transform = `perspective(1200px) rotateX(${rotX.toFixed(2)}deg) rotateY(${rotY.toFixed(2)}deg) translate3d(${transX.toFixed(1)}px, ${transY.toFixed(1)}px, 0)`;
       }
+
+      // Dynamic width scaling & color transition for DOM fallback
+      if (scrollProgressRef && parallaxWrapperRef.current) {
+        const p = Math.min(Math.max(scrollProgressRef.current, 0), 1);
+        const isMobile = window.innerWidth < 768;
+        const startVw = 60;
+        const endVw = isMobile ? 48 : 34;
+        const currentVw = startVw + (endVw - startVw) * p;
+        parallaxWrapperRef.current.style.width = `${currentVw}vw`;
+
+        if (pathRef.current) {
+          const colorT = Math.min(Math.max((p - 0.15) / 0.60, 0), 1);
+          const rgb = Math.round(17 + (255 - 17) * colorT);
+          pathRef.current.style.fill = `rgb(${rgb}, ${rgb}, ${rgb})`;
+        }
+      }
+
       animId = requestAnimationFrame(loop);
     };
     animId = requestAnimationFrame(loop);
@@ -154,6 +174,7 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
           aria-label="ArtDeejay"
         >
           <path
+            ref={pathRef}
             id="base-logo-path"
             d={LOGO_FILLED_PATH}
             fill="#111111"

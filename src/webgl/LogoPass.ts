@@ -58,6 +58,7 @@ uniform sampler2D u_fluidMask;
 uniform vec2 u_resolution;
 uniform float u_opacity;
 uniform vec3 u_baseLogoColor;
+uniform float u_scrollProgress;
 
 out vec4 fragColor;
 
@@ -70,13 +71,17 @@ void main() {
   }
 
   // Screen UV for perfectly aligned fluid mask sampling
-  // Exactly identical to BackgroundField's sampling formula!
   vec2 screenUV = gl_FragCoord.xy / u_resolution;
   float mask = texture(u_fluidMask, screenUV).r;
 
-  // Logo color: #111111 outside fluid, inverted white inside the liquid mask
-  vec3 whiteLogo = vec3(1.0, 1.0, 1.0);
-  vec3 logoColor = mix(u_baseLogoColor, whiteLogo, mask);
+  // Fluid inverted color adaptation:
+  // On white background: dark logo inverts to white
+  // On rich dark gradient background: white logo inverts to deep navy-blue #00334D
+  vec3 invertedOnWhite = vec3(1.0, 1.0, 1.0);
+  vec3 invertedOnGradient = vec3(0.0, 51.0 / 255.0, 77.0 / 255.0); // #00334D
+  vec3 fluidInvertColor = mix(invertedOnWhite, invertedOnGradient, u_scrollProgress);
+
+  vec3 logoColor = mix(u_baseLogoColor, fluidInvertColor, mask);
 
   fragColor = vec4(logoColor, alpha);
 }
@@ -97,6 +102,7 @@ export class LogoPass {
   private locDpr: WebGLUniformLocation | null = null;
   private locOpacity: WebGLUniformLocation | null = null;
   private locBaseLogoColor: WebGLUniformLocation | null = null;
+  private locScrollProgress: WebGLUniformLocation | null = null;
   private locLogoTex: WebGLUniformLocation | null = null;
   private locFluidMask: WebGLUniformLocation | null = null;
 
@@ -111,6 +117,7 @@ export class LogoPass {
     this.locDpr = gl.getUniformLocation(this.program, 'u_dpr');
     this.locOpacity = gl.getUniformLocation(this.program, 'u_opacity');
     this.locBaseLogoColor = gl.getUniformLocation(this.program, 'u_baseLogoColor');
+    this.locScrollProgress = gl.getUniformLocation(this.program, 'u_scrollProgress');
     this.locLogoTex = gl.getUniformLocation(this.program, 'u_logoTex');
     this.locFluidMask = gl.getUniformLocation(this.program, 'u_fluidMask');
 
@@ -221,12 +228,13 @@ export class LogoPass {
     parallax: [number, number],
     rotation: [number, number] = [0, 0],
     opacity: number = 1.0,
-    baseColor: [number, number, number] = [17 / 255, 17 / 255, 17 / 255]
+    baseColor: [number, number, number] = [17 / 255, 17 / 255, 17 / 255],
+    scrollProgress: number = 0.0
   ) {
     if (!this.logoTexture || opacity <= 0.001) return;
 
     const gl = this.gl;
-    const layout = computeLogoLayout(cssWidth, cssHeight, dpr);
+    const layout = computeLogoLayout(cssWidth, cssHeight, dpr, scrollProgress);
 
     // WebGL Y-axis is from bottom-up; compute bottom-left Y coordinate
     const logoBottomPx = (cssHeight - (layout.topCss + layout.heightCss)) * dpr;
@@ -255,6 +263,7 @@ export class LogoPass {
     gl.uniform1f(this.locDpr, dpr);
     gl.uniform1f(this.locOpacity, opacity);
     gl.uniform3f(this.locBaseLogoColor, baseColor[0], baseColor[1], baseColor[2]);
+    gl.uniform1f(this.locScrollProgress, scrollProgress);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 

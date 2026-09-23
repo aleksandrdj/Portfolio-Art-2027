@@ -23,23 +23,33 @@ export interface LogoLayout {
 
 /**
  * Computes exact logo placement according to specification:
- * - width strictly 60vw (0.60 * containerWidthCss) on all screen sizes
- * - extreme low viewport protection: if height exceeds 85% of viewport, scale down proportionally
+ * - initial width strictly 60vw (0.60 * containerWidthCss)
+ * - on scroll progress (0 -> 1):
+ *   - desktop (>=768px): scales from 60vw to 34vw
+ *   - mobile (<768px): scales from 60vw to 48vw
+ * - extreme low viewport protection: if height exceeds 85% (75% mobile) of viewport, scale down proportionally
  * - height strictly follows original viewBox 1920x787 (aspect ratio ~2.4396)
- * - centered horizontally and vertically
+ * - centered horizontally and vertically (50% x 50%)
  * - DPR influences only physical pixel coordinates, not CSS visible layout
  */
 export function computeLogoLayout(
   containerWidthCss: number,
   containerHeightCss: number,
-  dpr: number = 1
+  dpr: number = 1,
+  scrollProgress: number = 0
 ): LogoLayout {
-  const targetWidthCss = containerWidthCss * 0.60;
+  const isMobile = containerWidthCss < 768;
+  const startVw = 0.60;
+  const endVw = isMobile ? 0.48 : 0.34;
+  const pClamped = Math.min(Math.max(scrollProgress, 0), 1);
+  const currentVw = startVw + (endVw - startVw) * pClamped;
+
+  const targetWidthCss = containerWidthCss * currentVw;
   let widthCss = targetWidthCss;
   let heightCss = widthCss / ORIGINAL_VIEWBOX.aspectRatio;
 
   // Preserve full silhouette vertically in extreme low viewport scenarios
-  const maxHeightCss = containerHeightCss * 0.85;
+  const maxHeightCss = containerHeightCss * (isMobile ? 0.75 : 0.85);
   if (heightCss > maxHeightCss) {
     heightCss = maxHeightCss;
     widthCss = heightCss * ORIGINAL_VIEWBOX.aspectRatio;
