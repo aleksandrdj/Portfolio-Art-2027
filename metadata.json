@@ -1,0 +1,6 @@
+{
+  "name": "ArtDeejay — Graphic Designer",
+  "description": "Портфолио графического дизайнера ArtDeejay с вступительной каллиграфической анимацией и интерактивным жидким следом.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
