@@ -92,13 +92,13 @@ void main() {
   // - On white base: delicate, distinguishable cool gray (~#9CA8B0)
   // - On saturated dark gradient: low-contrast cyan-blue slightly lighter than background
   vec3 lineWhiteBg = vec3(156.0 / 255.0, 168.0 / 255.0, 176.0 / 255.0);
-  vec3 lineGradientBg = mix(livingGradient, colBright, 0.45);
+  vec3 lineGradientBg = mix(livingGradient, vec3(0.58, 0.86, 0.93), 0.70);
   vec3 lineColor = mix(lineWhiteBg, lineGradientBg, u_scrollProgress);
 
   // Single clear line strength parameter (no compounding nested factors extinguishing lines)
   // White state: 0.40 strength -> soft legible 0.75px contour lines
-  // Dark state:  0.22 strength -> subtle low-contrast cyan-blue contours
-  float lineStrength = mix(0.40, 0.22, u_scrollProgress) * u_opacity;
+  // Blue state: 0.38 strength with a pale cyan target keeps contours visible.
+  float lineStrength = mix(0.40, 0.38, u_scrollProgress) * u_opacity;
   float currentLineAlpha = lineAlpha * lineStrength;
 
   vec3 backgroundWithContours = mix(baseBg, lineColor, currentLineAlpha);
