@@ -98,7 +98,7 @@ void main() {
   // Single clear line strength parameter (no compounding nested factors extinguishing lines)
   // White state: 0.40 strength -> soft legible 0.75px contour lines
   // Blue state: 0.38 strength with a pale cyan target keeps contours visible.
-  float lineStrength = mix(0.40, 0.38, u_scrollProgress) * u_opacity;
+  float lineStrength = mix(0.40, 0.30, u_scrollProgress) * u_opacity;
   float currentLineAlpha = lineAlpha * lineStrength;
 
   vec3 backgroundWithContours = mix(baseBg, lineColor, currentLineAlpha);
