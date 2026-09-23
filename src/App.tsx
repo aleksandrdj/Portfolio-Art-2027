@@ -29,14 +29,30 @@ export default function App() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  // WebGL availability state for graceful fallback
+  // WebGL state
   const [isWebGLActive, setIsWebGLActive] = useState<boolean>(true);
+  const [isWebGLReadyFrameDrawn, setIsWebGLReadyFrameDrawn] = useState<boolean>(false);
+
   const handleWebGLReady = useCallback((ready: boolean) => {
     setIsWebGLActive(ready);
+    if (!ready) {
+      setIsWebGLReadyFrameDrawn(false);
+    }
+  }, []);
+
+  const handleFirstReadyFrame = useCallback(() => {
+    setIsWebGLReadyFrameDrawn(true);
   }, []);
 
   // Stage state: 'intro' | 'theme-transition' | 'ready'
-  const [appState, setAppState] = useState<AppState>('intro');
+  const [appState, setAppState] = useState<AppState>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        return 'ready';
+      }
+    }
+    return 'intro';
+  });
 
   // Key to force-remount intro component when replayed
   const [introKey, setIntroKey] = useState<number>(0);
@@ -75,6 +91,7 @@ export default function App() {
   // Replay function accessible globally, via 'R' key, and via URL param ?intro=1
   const replayIntro = useCallback(() => {
     document.body.style.backgroundColor = '#000000';
+    setIsWebGLReadyFrameDrawn(false);
     setAppState('intro');
     setIntroKey((k) => k + 1);
   }, []);
@@ -82,7 +99,6 @@ export default function App() {
   useEffect(() => {
     window.replayIntro = replayIntro;
 
-    // Check ?intro=1 query parameter
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get('intro') === '1') {
@@ -93,7 +109,6 @@ export default function App() {
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Replay intro if user presses 'R' outside input/textarea
       if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const activeEl = document.activeElement;
         const isInput =
@@ -141,9 +156,10 @@ export default function App() {
         appState={appState}
         prefersReducedMotion={prefersReducedMotion}
         onWebGLReady={handleWebGLReady}
+        onFirstReadyFrame={handleFirstReadyFrame}
       />
 
-      {/* Layer 3: Intro Calligraphy Signature Reveal & DOM Fallback (z-30) */}
+      {/* Layer 3: Intro Calligraphy Reveal & Seamless DOM Fallback (z-30) */}
       <CentralLogo
         key={introKey}
         appState={appState}
@@ -151,6 +167,7 @@ export default function App() {
         onIntroComplete={handleIntroComplete}
         prefersReducedMotion={prefersReducedMotion}
         isWebGLActive={isWebGLActive}
+        isWebGLReadyFrameDrawn={isWebGLReadyFrameDrawn}
       />
     </div>
   );

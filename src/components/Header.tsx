@@ -1,4 +1,5 @@
 import React from 'react';
+import { LOGO_FILLED_PATH, LOGO_VIEWBOX } from '../data/logoData';
 import { Language } from '../types';
 
 interface HeaderProps {
@@ -23,14 +24,28 @@ export const Header: React.FC<HeaderProps> = ({
       aria-hidden={!isVisible}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Left: Brand typography with semantic heading */}
+        {/* Left: Compact original SVG brand mark */}
         <div className="flex items-center">
-          <h1
-            id="brand-name"
-            className="text-neutral-900 tracking-[-0.02em] font-medium text-sm md:text-base font-sans"
+          <div
+            id="brand-mark"
+            className="h-6 md:h-7 flex items-center text-neutral-900"
+            role="img"
+            aria-label="ArtDeejay"
           >
-            ArtDeejay
-          </h1>
+            <svg
+              viewBox={LOGO_VIEWBOX}
+              className="h-full w-auto block fill-current"
+              style={{ aspectRatio: '1920 / 787' }}
+              aria-hidden="true"
+            >
+              <path
+                d={LOGO_FILLED_PATH}
+                fillRule="evenodd"
+                clipRule="evenodd"
+              />
+            </svg>
+            <h1 className="sr-only">ArtDeejay</h1>
+          </div>
         </div>
 
         {/* Right: Inactive nav items + language toggle */}
@@ -39,23 +54,23 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center space-x-6 md:space-x-8 text-xs md:text-sm font-sans"
           aria-label="Navigation"
         >
-          {/* Desktop-only inactive nav sections */}
+          {/* Desktop-only inactive nav sections (no empty href="#") */}
           <div className="hidden md:flex items-center space-x-7">
             <span
               id="nav-item-work"
-              className="text-neutral-400 cursor-default tracking-wide font-normal transition-colors"
+              className="text-neutral-400 cursor-default tracking-wide font-normal select-none"
             >
               {language === 'ru' ? 'Работы' : 'Work'}
             </span>
             <span
               id="nav-item-about"
-              className="text-neutral-400 cursor-default tracking-wide font-normal transition-colors"
+              className="text-neutral-400 cursor-default tracking-wide font-normal select-none"
             >
               {language === 'ru' ? 'Обо мне' : 'About'}
             </span>
             <span
               id="nav-item-contact"
-              className="text-neutral-400 cursor-default tracking-wide font-normal transition-colors"
+              className="text-neutral-400 cursor-default tracking-wide font-normal select-none"
             >
               {language === 'ru' ? 'Контакты' : 'Contact'}
             </span>

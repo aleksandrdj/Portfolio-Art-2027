@@ -9,6 +9,7 @@ interface CentralLogoProps {
   onIntroComplete: () => void;
   prefersReducedMotion: boolean;
   isWebGLActive?: boolean;
+  isWebGLReadyFrameDrawn?: boolean;
 }
 
 export const CentralLogo: React.FC<CentralLogoProps> = ({
@@ -17,6 +18,7 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
   onIntroComplete,
   prefersReducedMotion,
   isWebGLActive = false,
+  isWebGLReadyFrameDrawn = false,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const parallaxWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -30,13 +32,13 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
   const mouseCurrentRef = useRef({ x: 0, y: 0 });
   const isTouchRef = useRef(false);
 
-  // Stable callbacks references so that changing callbacks or appState never recreates the GSAP timeline!
+  // Stable callbacks references so changing callbacks or appState never recreates timeline
   const callbacksRef = useRef({ onThemeTransitionStart, onIntroComplete });
   useEffect(() => {
     callbacksRef.current = { onThemeTransitionStart, onIntroComplete };
   });
 
-  // Base logo color: white during intro, #111111 after
+  // Base logo color: white during intro, #111111 after transition
   const [logoFill, setLogoFill] = useState<string>(
     prefersReducedMotion || appState === 'ready' ? '#111111' : '#FFFFFF'
   );
@@ -52,8 +54,6 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
   }, []);
 
   // GSAP Intro Timeline
-  // Runs ONCE on mount (unless prefersReducedMotion changes).
-  // Strictly does NOT depend on appState to avoid the recreation/cancellation cycle!
   useEffect(() => {
     if (prefersReducedMotion) {
       setLogoFill('#111111');
@@ -97,7 +97,7 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
       try {
         startPt = strokePaths[0].getPointAtLength(0);
       } catch {
-        // use fallback start point
+        // fallback
       }
       tip.setAttribute('cx', `${startPt.x}`);
       tip.setAttribute('cy', `${startPt.y}`);
@@ -118,10 +118,10 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
     // 1. Initial black screen hold (0.15s)
     tl.to({}, { duration: 0.15 });
 
-    // 2. Fade in brush tip (0.1s)
+    // 2. Fade in small brush tip (0.1s)
     if (tip && tipGlow) {
       tl.to([tip, tipGlow], {
-        opacity: 1,
+        opacity: 0.9,
         duration: 0.1,
         ease: 'power1.out',
       });
@@ -157,32 +157,30 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
             }
           },
           onComplete: () => {
-            // Ensure exact 0 offset at end of each stroke
             path.style.strokeDashoffset = '0';
           },
         },
-        idx === 0 ? undefined : '>-0.01' // smooth tight chaining
+        idx === 0 ? undefined : '>-0.01'
       );
     });
 
-    // 4. Fade out glowing tip (0.2s)
+    // 4. Fade out glowing tip (0.15s)
     if (tip && tipGlow) {
       tl.to(
         [tip, tipGlow],
         {
           opacity: 0,
-          duration: 0.2,
+          duration: 0.15,
           ease: 'power2.out',
         },
         '+=0.05'
       );
     }
 
-    // 5. Brief hold on white signature over deep black (0.15s)
+    // 5. Brief hold on white signature over black (0.15s)
     tl.to({}, { duration: 0.15 });
 
-    // 6. Coordinated theme transition (0.8s)
-    // Black background transitions to white, logo transitions smoothly to #111111
+    // 6. Theme transition (0.8s): black background transitions to white, logo to #111111
     tl.to(
       {},
       {
@@ -266,9 +264,10 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
     };
   }, [isWebGLActive, appState, prefersReducedMotion]);
 
-  // If WebGL is active and ready, the logo is rendered on the WebGL Canvas.
-  // We keep DOM logo visible until ready so there is ZERO blank flash.
-  if (appState === 'ready' && isWebGLActive) {
+  // Seamless Handover (Requirement 3):
+  // DOM logo unmounts ONLY when WebGL has confirmed its first ready frame is drawn on screen.
+  // If WebGL is unavailable or lost, DOM logo remains active as fallback.
+  if (appState === 'ready' && isWebGLActive && isWebGLReadyFrameDrawn) {
     return null;
   }
 
@@ -297,10 +296,10 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
           aria-label="ArtDeejay"
         >
           <defs>
-            {/* Soft glowing filter for the drawing brush tip */}
+            {/* Small subtle glow filter for drawing brush tip */}
             <filter id="tip-glow-filter" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur1" />
-              <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur2" />
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur1" />
+              <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur2" />
               <feMerge>
                 <feMergeNode in="blur2" />
                 <feMergeNode in="blur1" />
@@ -313,7 +312,7 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
               <mask id="intro-signature-mask" maskUnits="userSpaceOnUse">
                 {/* Black background hides unrevealed portions */}
                 <rect width="1920" height="787" fill="black" />
-                {/* Guide paths with round caps uncover the logo progressively */}
+                {/* Guide paths uncover the logo progressively */}
                 {REVEAL_STROKE_PATHS.map((stroke, index) => (
                   <path
                     key={stroke.id}
@@ -332,23 +331,24 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
             )}
           </defs>
 
-          {/* Base Logo Path with evenodd rule */}
+          {/* Base Logo Path with evenodd rule and clip-rule */}
           <path
             id="base-logo-path"
             d={LOGO_FILLED_PATH}
             fill={logoFill}
             fillRule="evenodd"
+            clipRule="evenodd"
             mask={introMaskActive ? 'url(#intro-signature-mask)' : undefined}
           />
 
-          {/* Glowing Brush Tip during Intro */}
+          {/* Glowing Brush Tip during Intro: small, refined tip without large balls */}
           {introMaskActive && (
             <g id="glowing-brush-tip" className="pointer-events-none" aria-hidden="true">
               <circle
                 ref={tipGlowRef}
                 cx="0"
                 cy="0"
-                r="28"
+                r="10"
                 fill="white"
                 filter="url(#tip-glow-filter)"
                 opacity="0"
@@ -357,7 +357,7 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
                 ref={tipRef}
                 cx="0"
                 cy="0"
-                r="8"
+                r="3.5"
                 fill="white"
                 opacity="0"
               />

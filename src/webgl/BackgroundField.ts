@@ -16,7 +16,7 @@ precision highp float;
 
 in vec2 v_uv;
 
-uniform sampler2D u_velocity;
+uniform sampler2D u_fluidMask;
 uniform vec2 u_resolution;
 uniform float u_time;
 uniform vec2 u_mouseNDC;
@@ -35,13 +35,9 @@ void main() {
   // 1. Normalized coordinates
   vec2 p = vec2(uv.x * aspect, uv.y);
 
-  // 2. Mouse coordinates in same space
-  vec2 mouseUV = u_mouseNDC * 0.5 + 0.5;
-  mouseUV.x *= aspect;
-
   // Constants: reduced speed for slow, elegant, meditative drift
   const float SCALE = 1.0;
-  const float SPEED = 0.02; // Significantly reduced speed
+  const float SPEED = 0.02;
   const float DISTORT_SCALE = 0.8;
   const float DISTORT_INTENSITY = 0.35;
   const float NOISE_DETAIL = 3.0;
@@ -50,17 +46,16 @@ void main() {
   // Slow autonomous organic distortion field:
   float warp = 0.5 + 0.5 * snoise(vec3(p * DISTORT_SCALE, u_time * SPEED * 0.25));
 
-  // Shifted coordinates depend only on the gentle organic warp - zero mouse twitch
+  // Shifted coordinates depend only on the gentle organic warp
   vec2 shifted = p + vec2(warp * DISTORT_INTENSITY);
   float noiseValue = 0.5 + 0.5 * snoise(vec3(shifted * SCALE, u_time * SPEED));
 
-  // 6. Repeating levels & region
+  // Repeating levels & region
   float fVal = noiseValue * NOISE_DETAIL;
   float phase = fract(fVal);
   float region = step(0.5, phase);
 
-  // Resolution-stable anti-aliased contour extraction for both phase=0.5 and phase=0.0/1.0
-  // Both boundaries occur exactly where 2.0 * fVal is an integer
+  // Resolution-stable anti-aliased contour extraction
   float twoF = 2.0 * fVal;
   float distToBoundary = abs(round(twoF) - twoF);
   float dF = max(fwidth(twoF), 0.0001);
@@ -70,10 +65,10 @@ void main() {
   float targetPxWidth = 0.85 * max(u_dpr, 1.0);
   float lineAlpha = 1.0 - smoothstep(targetPxWidth * 0.4, targetPxWidth * 0.9, pxDist);
 
-  // Colors as specified:
+  // Palette:
   // Background: #FFFFFF
   // Lines: #E3E4E2
-  // Trail Light: #EEEEEB
+  // Trail Light: #EEEEEB (slightly darker than white)
   // Trail Dark:  #DDDFD9
   vec3 bgColor = vec3(1.0, 1.0, 1.0);
   vec3 lineColor = vec3(227.0 / 255.0, 228.0 / 255.0, 226.0 / 255.0);
@@ -83,12 +78,12 @@ void main() {
   // Combine background and contours
   vec3 backgroundWithContours = mix(bgColor, lineColor, lineAlpha * u_opacity);
 
-  // Fluid velocity & compact trail mask (strictly <= 15% of screen)
-  vec2 v = texture(u_velocity, uv).xy;
-  float speed = length(v);
-  float mask = smoothstep(0.08, 0.40, speed);
+  // Read unified fluid mask in exact screen coordinates
+  // screenUV = gl_FragCoord.xy / u_resolution
+  vec2 screenUV = gl_FragCoord.xy / u_resolution;
+  float mask = texture(u_fluidMask, screenUV).r;
 
-  // Trail color depending on background region
+  // Fluid trail color slightly darker than white background
   vec3 trailColor = mix(trailLight, trailDark, region);
   vec3 finalColor = mix(backgroundWithContours, trailColor, mask * u_opacity);
 
@@ -102,7 +97,7 @@ export class BackgroundField {
   private quadBuffer: WebGLBuffer;
   private program: WebGLProgram;
 
-  private locVelocity: WebGLUniformLocation | null = null;
+  private locFluidMask: WebGLUniformLocation | null = null;
   private locResolution: WebGLUniformLocation | null = null;
   private locTime: WebGLUniformLocation | null = null;
   private locMouseNDC: WebGLUniformLocation | null = null;
@@ -117,7 +112,7 @@ export class BackgroundField {
     this.quadBuffer = quad.buffer;
 
     this.program = createProgram(gl, VS_COMPOSITE, FS_BACKGROUND_COMPOSITE);
-    this.locVelocity = gl.getUniformLocation(this.program, 'u_velocity');
+    this.locFluidMask = gl.getUniformLocation(this.program, 'u_fluidMask');
     this.locResolution = gl.getUniformLocation(this.program, 'u_resolution');
     this.locTime = gl.getUniformLocation(this.program, 'u_time');
     this.locMouseNDC = gl.getUniformLocation(this.program, 'u_mouseNDC');
@@ -127,7 +122,7 @@ export class BackgroundField {
   }
 
   public render(
-    velocityTex: WebGLTexture | null,
+    fluidMaskTex: WebGLTexture | null,
     width: number,
     height: number,
     time: number,
@@ -137,12 +132,13 @@ export class BackgroundField {
     dpr: number
   ) {
     const gl = this.gl;
+    gl.viewport(0, 0, width, height);
     gl.useProgram(this.program);
     gl.bindVertexArray(this.quadVAO);
 
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, velocityTex);
-    gl.uniform1i(this.locVelocity, 0);
+    gl.bindTexture(gl.TEXTURE_2D, fluidMaskTex);
+    gl.uniform1i(this.locFluidMask, 0);
 
     gl.uniform2f(this.locResolution, width, height);
     gl.uniform1f(this.locTime, time);
@@ -151,7 +147,6 @@ export class BackgroundField {
     gl.uniform1f(this.locOpacity, opacity);
     gl.uniform1f(this.locDpr, dpr);
 
-    gl.viewport(0, 0, width, height);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     gl.bindVertexArray(null);

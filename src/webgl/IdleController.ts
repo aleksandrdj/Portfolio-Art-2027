@@ -18,6 +18,8 @@ interface BezierCurve {
 export class IdleController {
   private lastRealActivityTime = performance.now();
   private mouseInsideWindow = false;
+  private lastClientX = -9999;
+  private lastClientY = -9999;
 
   // Real mouse state & accumulated impulse
   private realCurrentNDC: [number, number] | null = null;
@@ -34,22 +36,31 @@ export class IdleController {
   private autoPreviousNDC: [number, number] | null = null;
 
   // Timings: 4s without real movement triggers autonomous pass, 5-9s between subsequent passes
-  private idleDelay = 4000;
-  private nextPassDelay = 4000;
+  private readonly idleThreshold = 4000;
+  private nextPassTime = 0;
 
   constructor() {}
 
   public onMouseMove(clientX: number, clientY: number, width: number, height: number) {
     const now = performance.now();
-    this.lastRealActivityTime = now;
-    this.mouseInsideWindow = true;
+    const moveDist = Math.hypot(clientX - this.lastClientX, clientY - this.lastClientY);
 
-    // If an autonomous pass was currently running, cancel it immediately without an impulse spike
-    if (this.isAutonomousActive) {
-      this.isAutonomousActive = false;
-      this.currentCurve = null;
-      this.autoPreviousNDC = null;
-      this.autoCurrentNDC = null;
+    this.mouseInsideWindow = true;
+    this.lastClientX = clientX;
+    this.lastClientY = clientY;
+
+    // Only count as active if cursor actually moved by at least 0.5px
+    if (moveDist > 0.5) {
+      this.lastRealActivityTime = now;
+
+      // If an autonomous pass was currently running, stop autonomous splat injection immediately.
+      // Existing fluid simulation is NOT cleared, allowing natural physical dissipation!
+      if (this.isAutonomousActive) {
+        this.isAutonomousActive = false;
+        this.currentCurve = null;
+        this.autoPreviousNDC = null;
+        this.autoCurrentNDC = null;
+      }
     }
 
     const ndcX = (2.0 * clientX) / width - 1.0;
@@ -65,7 +76,6 @@ export class IdleController {
       const rawPace = Math.min(dist * 25.0, 1.5);
       this.smoothedPace += (rawPace - this.smoothedPace) * 0.2;
     } else {
-      // First cursor entry - initialize without generating a jump
       this.pendingDeltaX = 0.0;
       this.pendingDeltaY = 0.0;
     }
@@ -83,7 +93,7 @@ export class IdleController {
 
   public onTabVisibilityChange(hidden: boolean) {
     if (!hidden) {
-      // Waking up: reset timer so an autonomous pass doesn't fire with a huge elapsed time
+      // Waking up: reset timers to prevent time jumps
       this.lastRealActivityTime = performance.now();
       this.pendingDeltaX = 0.0;
       this.pendingDeltaY = 0.0;
@@ -124,48 +134,48 @@ export class IdleController {
     let p0: [number, number];
     let p3: [number, number];
 
-    if (side < 0.35) {
-      // Left to right
+    if (side < 0.4) {
+      // Left to right diagonal
       p0 = [-1.15, (Math.random() - 0.5) * 0.8];
       p3 = [1.15, (Math.random() - 0.5) * 0.8];
-    } else if (side < 0.7) {
-      // Right to left
+    } else if (side < 0.8) {
+      // Right to left diagonal
       p0 = [1.15, (Math.random() - 0.5) * 0.8];
       p3 = [-1.15, (Math.random() - 0.5) * 0.8];
     } else {
-      // Top to bottom diagonal
+      // Top to bottom curve
       p0 = [(Math.random() - 0.5) * 1.2, 1.15];
       p3 = [(Math.random() - 0.5) * 1.2, -1.15];
     }
 
-    const cx = (Math.random() - 0.5) * 0.35;
-    const cy = (Math.random() - 0.5) * 0.25;
+    const cx = (Math.random() - 0.5) * 0.4;
+    const cy = (Math.random() - 0.5) * 0.3;
 
     const p1: [number, number] = [
-      p0[0] + (cx - p0[0]) * 0.7 + (Math.random() - 0.5) * 0.3,
-      p0[1] + (cy - p0[1]) * 0.7 + (Math.random() - 0.5) * 0.3,
+      p0[0] + (cx - p0[0]) * 0.7 + (Math.random() - 0.5) * 0.25,
+      p0[1] + (cy - p0[1]) * 0.7 + (Math.random() - 0.5) * 0.25,
     ];
     const p2: [number, number] = [
-      cx + (p3[0] - cx) * 0.4 + (Math.random() - 0.5) * 0.3,
-      cy + (p3[1] - cy) * 0.4 + (Math.random() - 0.5) * 0.3,
+      cx + (p3[0] - cx) * 0.4 + (Math.random() - 0.5) * 0.25,
+      cy + (p3[1] - cy) * 0.4 + (Math.random() - 0.5) * 0.25,
     ];
 
     return { p0, p1, p2, p3 };
   }
 
   /**
-   * Consumes accumulated input for a physics simulation step.
-   * Called strictly by the simulation loop with consistent frequency.
+   * Consumes input for physics simulation step.
+   * Stationary mouse inside window for >= 4s is treated as idle!
    */
   public consumeSimulationStep(now: number, mouseForce: number): SplatInput | null {
     const idleElapsed = now - this.lastRealActivityTime;
-    const isUserActive = this.mouseInsideWindow && idleElapsed < this.idleDelay;
+    // A stationary mouse inside the window for >= 4 seconds is considered idle!
+    const isUserActive = idleElapsed < this.idleThreshold;
 
     // 1. Real User Movement
     if (isUserActive && this.realCurrentNDC) {
       const dx = this.pendingDeltaX;
       const dy = this.pendingDeltaY;
-      // Reset accumulated deltas
       this.pendingDeltaX = 0.0;
       this.pendingDeltaY = 0.0;
 
@@ -183,9 +193,9 @@ export class IdleController {
       return null;
     }
 
-    // 2. Autonomous Idle Pass
+    // 2. Autonomous Idle Pass (triggered when idle >= 4s, whether mouse left or stayed still)
     if (!this.isAutonomousActive) {
-      if (idleElapsed >= this.nextPassDelay) {
+      if (idleElapsed >= this.idleThreshold && now >= this.nextPassTime) {
         this.isAutonomousActive = true;
         this.autonomousStartTime = now;
         this.autonomousDuration = 2200 + Math.random() * 800; // 2.2 - 3.0s
@@ -203,8 +213,7 @@ export class IdleController {
         this.currentCurve = null;
         this.autoPreviousNDC = null;
         this.autoCurrentNDC = null;
-        this.lastRealActivityTime = now;
-        this.nextPassDelay = 5000 + Math.random() * 4000; // 5 - 9 seconds
+        this.nextPassTime = now + 5000 + Math.random() * 4000; // 5 - 9 seconds
         return null;
       }
 
@@ -236,13 +245,9 @@ export class IdleController {
     return null;
   }
 
-  /**
-   * Read-only snapshot for rendering background field and uniforms.
-   * Does NOT consume accumulated deltas or alter previous coordinates.
-   */
   public getRenderSnapshot(now: number): RenderSnapshot {
     const idleElapsed = now - this.lastRealActivityTime;
-    const isUserActive = this.mouseInsideWindow && idleElapsed < this.idleDelay;
+    const isUserActive = idleElapsed < this.idleThreshold;
 
     if (isUserActive && this.realCurrentNDC) {
       return {
@@ -258,7 +263,6 @@ export class IdleController {
       };
     }
 
-    // Decay smoothed pace when idle
     this.smoothedPace *= 0.95;
 
     return {

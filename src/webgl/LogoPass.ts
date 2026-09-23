@@ -54,7 +54,7 @@ precision highp float;
 in vec2 v_uv;
 
 uniform sampler2D u_logoTex;
-uniform sampler2D u_velocity;
+uniform sampler2D u_fluidMask;
 uniform vec2 u_resolution;
 uniform float u_opacity;
 uniform vec3 u_baseLogoColor;
@@ -70,19 +70,11 @@ void main() {
   }
 
   // Screen UV for perfectly aligned fluid mask sampling
+  // Exactly identical to BackgroundField's sampling formula!
   vec2 screenUV = gl_FragCoord.xy / u_resolution;
+  float mask = texture(u_fluidMask, screenUV).r;
 
-  // Fluid velocity & mask derivation matching BackgroundField formula
-  vec2 v = texture(u_velocity, screenUV).xy;
-  float speed = length(v);
-  vec3 encoded = vec3(v * 0.5 + 0.5, 1.0);
-  vec3 flowColor = mix(vec3(1.0), encoded, speed);
-
-  float signal = 1.0 - flowColor.r;
-  float aa = max(fwidth(signal), 0.001);
-  float mask = smoothstep(0.1 - aa, 0.1 + aa, signal);
-
-  // Logo color: #111111 in normal state, inverted white inside the liquid mask
+  // Logo color: #111111 outside fluid, inverted white inside the liquid mask
   vec3 whiteLogo = vec3(1.0, 1.0, 1.0);
   vec3 logoColor = mix(u_baseLogoColor, whiteLogo, mask);
 
@@ -106,7 +98,7 @@ export class LogoPass {
   private locOpacity: WebGLUniformLocation | null = null;
   private locBaseLogoColor: WebGLUniformLocation | null = null;
   private locLogoTex: WebGLUniformLocation | null = null;
-  private locVelocity: WebGLUniformLocation | null = null;
+  private locFluidMask: WebGLUniformLocation | null = null;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -120,7 +112,7 @@ export class LogoPass {
     this.locOpacity = gl.getUniformLocation(this.program, 'u_opacity');
     this.locBaseLogoColor = gl.getUniformLocation(this.program, 'u_baseLogoColor');
     this.locLogoTex = gl.getUniformLocation(this.program, 'u_logoTex');
-    this.locVelocity = gl.getUniformLocation(this.program, 'u_velocity');
+    this.locFluidMask = gl.getUniformLocation(this.program, 'u_fluidMask');
 
     const vao = gl.createVertexArray();
     const buf = gl.createBuffer();
@@ -154,7 +146,7 @@ export class LogoPass {
     this.generateLogoTexture();
   }
 
-  private generateLogoTexture() {
+  public generateLogoTexture() {
     const gl = this.gl;
     const canvas = document.createElement('canvas');
     // High-resolution rasterization based on original viewBox 1920x787
@@ -165,12 +157,42 @@ export class LogoPass {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Render path directly from original SVG data
+    if (typeof Image !== 'undefined') {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Draw white mask from original SVG
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        this.uploadCanvasToTexture(canvas);
+      };
+      img.onerror = () => {
+        // Fallback to path rendering
+        this.renderPathToCanvas(ctx, canvas);
+        this.uploadCanvasToTexture(canvas);
+      };
+      img.src = '/Logo_ArtDeejay.svg';
+    } else {
+      this.renderPathToCanvas(ctx, canvas);
+      this.uploadCanvasToTexture(canvas);
+    }
+  }
+
+  private renderPathToCanvas(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     const scale = canvas.width / ORIGINAL_VIEWBOX.width;
     ctx.scale(scale, scale);
-    ctx.fillStyle = '#FFFFFF'; // White silhouette texture; fragment shader colors it
+    ctx.fillStyle = '#FFFFFF';
     const p = new Path2D(LOGO_FILLED_PATH);
     ctx.fill(p, 'evenodd');
+  }
+
+  private uploadCanvasToTexture(canvas: HTMLCanvasElement) {
+    const gl = this.gl;
+    if (this.logoTexture) {
+      gl.deleteTexture(this.logoTexture);
+      this.logoTexture = null;
+    }
 
     const texture = gl.createTexture();
     if (!texture) return;
@@ -191,7 +213,7 @@ export class LogoPass {
   }
 
   public render(
-    velocityTex: WebGLTexture | null,
+    fluidMaskTex: WebGLTexture | null,
     cssWidth: number,
     cssHeight: number,
     dpr: number,
@@ -219,8 +241,8 @@ export class LogoPass {
     gl.uniform1i(this.locLogoTex, 0);
 
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, velocityTex);
-    gl.uniform1i(this.locVelocity, 1);
+    gl.bindTexture(gl.TEXTURE_2D, fluidMaskTex);
+    gl.uniform1i(this.locFluidMask, 1);
 
     const physicalWidth = cssWidth * dpr;
     const physicalHeight = cssHeight * dpr;
