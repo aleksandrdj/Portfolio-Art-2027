@@ -15,12 +15,13 @@ export const SiluetLayer: React.FC<SiluetLayerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  // Responsive scale dimensions according to cover: scale = max(viewportWidth / 1497, viewportHeight / 2079)
+  // Responsive scale dimensions according to cover: scale = max(viewportWidth / 1497, viewportHeight / 2079, widescreen min)
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
     if (typeof window === 'undefined') return { width: ORIGINAL_WIDTH, height: ORIGINAL_HEIGHT };
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const scale = Math.max(vw / ORIGINAL_WIDTH, vh / ORIGINAL_HEIGHT);
+    // On wide screens, maintain sufficient figure presence so head and shoulders are well framed
+    const scale = Math.max(vw / ORIGINAL_WIDTH, vh / ORIGINAL_HEIGHT, (vw * 0.58) / ORIGINAL_WIDTH);
     return {
       width: Math.round(ORIGINAL_WIDTH * scale),
       height: Math.round(ORIGINAL_HEIGHT * scale),
@@ -31,7 +32,7 @@ export const SiluetLayer: React.FC<SiluetLayerProps> = ({
     const handleResize = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const scale = Math.max(vw / ORIGINAL_WIDTH, vh / ORIGINAL_HEIGHT);
+      const scale = Math.max(vw / ORIGINAL_WIDTH, vh / ORIGINAL_HEIGHT, (vw * 0.58) / ORIGINAL_WIDTH);
       setDimensions({
         width: Math.round(ORIGINAL_WIDTH * scale),
         height: Math.round(ORIGINAL_HEIGHT * scale),
@@ -50,16 +51,17 @@ export const SiluetLayer: React.FC<SiluetLayerProps> = ({
     const update = () => {
       const p = scrollProgressRef.current;
 
-      // Starts rising from the first pixels of scroll
-      // Reaches bottom: 0 at around progress 0.70
-      const t = Math.min(p / 0.70, 1.0);
+      // Starts rising smoothly from the first pixels of scroll (p = 0)
+      // Reaches final anchored position (bottom: 0) around progress 0.75
+      const t = Math.min(p / 0.75, 1.0);
       const easedT = t * (2 - t);
 
       // Max opacity strictly 0.10 (10%) as specified
       const opacity = easedT * 0.10;
 
-      // Vertical entrance: slides up from bottom: 35% below to 0%
-      const translateY = (1.0 - easedT) * 35;
+      // Initial position requirement: top edge starts behind the bottom of the screen (100% translateY)
+      // and smoothly rises up to 0% at bottom edge
+      const translateY = (1.0 - easedT) * 100;
 
       if (imgRef.current) {
         imgRef.current.style.opacity = `${opacity}`;
@@ -91,9 +93,8 @@ export const SiluetLayer: React.FC<SiluetLayerProps> = ({
           width: `${dimensions.width}px`,
           height: `${dimensions.height}px`,
           opacity: 0,
-          transform: 'translate(-50%, 35%)',
+          transform: 'translate(-50%, 100%)',
           // Dark silhouette tint: #001C28
-          // Using brightness & color filter to ensure dark tone #001C28 on the background
           filter: 'brightness(0) drop-shadow(0 0 1px #001C28)',
         }}
       />

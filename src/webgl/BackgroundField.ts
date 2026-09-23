@@ -56,9 +56,9 @@ void main() {
   float dF = max(fwidth(twoF), 0.0001);
   float pxDist = distToBoundary / dF;
 
-  // Target thickness: ~0.7 CSS px (scaled by DPR)
-  float targetPxWidth = 0.7 * max(u_dpr, 1.0);
-  float lineAlpha = 1.0 - smoothstep(targetPxWidth * 0.4, targetPxWidth * 0.85, pxDist);
+  // Target thickness: ~0.75 CSS px (scaled by DPR)
+  float targetPxWidth = 0.75 * max(u_dpr, 1.0);
+  float lineAlpha = 1.0 - smoothstep(targetPxWidth * 0.35, targetPxWidth * 0.95, pxDist);
 
   // Living gradient palette (from specification):
   // Bright cyan-blue: #008CB2 -> vec3(0.0, 140.0 / 255.0, 178.0 / 255.0)
@@ -88,15 +88,17 @@ void main() {
   vec3 baseBg = mix(vec3(1.0, 1.0, 1.0), livingGradient, u_scrollProgress);
 
   // Topographic lines:
-  // On white: delicate warm gray #E4E6E3
-  // On rich gradient: delicate shade slightly lighter than background (mix with cyan), no glow!
-  vec3 lineWhiteBg = vec3(228.0 / 255.0, 230.0 / 255.0, 227.0 / 255.0);
-  vec3 lineGradientBg = mix(livingGradient, colBright, 0.22);
+  // - On white base: delicate, distinguishable cool gray (~#9CA8B0)
+  // - On saturated dark gradient: low-contrast cyan-blue slightly lighter than background
+  vec3 lineWhiteBg = vec3(156.0 / 255.0, 168.0 / 255.0, 176.0 / 255.0);
+  vec3 lineGradientBg = mix(livingGradient, colBright, 0.45);
   vec3 lineColor = mix(lineWhiteBg, lineGradientBg, u_scrollProgress);
 
-  // Target opacity for contours on saturated gradient: strictly 0.08 (range 0.06 - 0.10)
-  float lineOpacity = mix(0.18, 0.08, u_scrollProgress) * u_opacity;
-  float currentLineAlpha = lineAlpha * lineOpacity;
+  // Single clear line strength parameter (no compounding nested factors extinguishing lines)
+  // White state: 0.40 strength -> soft legible 0.75px contour lines
+  // Dark state:  0.22 strength -> subtle low-contrast cyan-blue contours
+  float lineStrength = mix(0.40, 0.22, u_scrollProgress) * u_opacity;
+  float currentLineAlpha = lineAlpha * lineStrength;
 
   vec3 backgroundWithContours = mix(baseBg, lineColor, currentLineAlpha);
 

@@ -1,34 +1,30 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LOGO_FILLED_PATH, LOGO_VIEWBOX } from '../data/logoData';
 import { AppState } from '../types';
 
 interface CentralLogoProps {
   appState: AppState;
   prefersReducedMotion: boolean;
-  isWebGLActive?: boolean;
-  isWebGLReadyFrameDrawn?: boolean;
   scrollProgressRef?: React.MutableRefObject<number>;
 }
 
 export const CentralLogo: React.FC<CentralLogoProps> = ({
   appState,
   prefersReducedMotion,
-  isWebGLActive = false,
-  isWebGLReadyFrameDrawn = false,
   scrollProgressRef,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const parallaxWrapperRef = useRef<HTMLDivElement | null>(null);
-  const pathRef = useRef<SVGPathElement | null>(null);
+  const fillPathRef = useRef<SVGPathElement | null>(null);
+  const strokePathRef = useRef<SVGPathElement | null>(null);
 
-  // Parallax state for DOM fallback
+  const pathLengthRef = useRef<number>(25000);
+  const animStartTimeRef = useRef<number | null>(null);
+
+  // Parallax state
   const mouseTargetRef = useRef({ x: 0, y: 0 });
   const mouseCurrentRef = useRef({ x: 0, y: 0 });
   const isTouchRef = useRef(false);
-
-  // Smooth fade-in over 900ms with cubic ease-out when entering ready state
-  const [opacity, setOpacity] = useState<number>(() => (prefersReducedMotion ? 1.0 : 0.0));
-  const [isParallaxActive, setIsParallaxActive] = useState<boolean>(() => prefersReducedMotion);
 
   useEffect(() => {
     isTouchRef.current =
@@ -36,51 +32,30 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
       ('ontouchstart' in window || navigator.maxTouchPoints > 0);
   }, []);
 
-  // Fade in animation when appState reaches 'ready' (900ms cubic ease-out)
-  useEffect(() => {
-    if (appState !== 'ready') {
-      setOpacity(0.0);
-      setIsParallaxActive(false);
-      return;
-    }
-
-    if (prefersReducedMotion) {
-      setOpacity(1.0);
-      setIsParallaxActive(true);
-      return;
-    }
-
-    setOpacity(0.0);
-    setIsParallaxActive(false);
-
-    const start = performance.now();
-    const duration = 900; // 900ms smooth ease-out fade-in without zoom
-    let frameId: number;
-
-    const tick = (now: number) => {
-      const elapsed = now - start;
-      const p = Math.min(Math.max(elapsed / duration, 0), 1.0);
-      // Cubic ease-out: 1 - (1 - p)^3
-      const eased = 1 - Math.pow(1 - p, 3);
-      setOpacity(eased);
-
-      if (p < 1.0) {
-        frameId = requestAnimationFrame(tick);
-      } else {
-        setOpacity(1.0);
-        setIsParallaxActive(true);
+  // Measure path length on mount
+  useLayoutEffect(() => {
+    if (strokePathRef.current) {
+      try {
+        const len = strokePathRef.current.getTotalLength();
+        if (len && !isNaN(len) && len > 0) {
+          pathLengthRef.current = len;
+          strokePathRef.current.style.strokeDasharray = `${len}`;
+          strokePathRef.current.style.strokeDashoffset = prefersReducedMotion ? '0' : `${len}`;
+        }
+      } catch {
+        // Fallback default
+        strokePathRef.current.style.strokeDasharray = '25000';
+        strokePathRef.current.style.strokeDashoffset = prefersReducedMotion ? '0' : '25000';
       }
-    };
-
-    frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
-  }, [appState, prefersReducedMotion]);
-
-  // Smooth DOM Parallax (Active strictly after logo appearance is complete)
-  useEffect(() => {
-    if (appState !== 'ready' || !isParallaxActive || isTouchRef.current || prefersReducedMotion) {
-      return;
     }
+    if (fillPathRef.current) {
+      fillPathRef.current.style.opacity = prefersReducedMotion ? '1' : '0';
+    }
+  }, [prefersReducedMotion]);
+
+  // Mouse parallax listeners
+  useEffect(() => {
+    if (isTouchRef.current || prefersReducedMotion) return;
 
     const onMouseMove = (e: MouseEvent) => {
       const nx = (e.clientX / window.innerWidth) * 2 - 1;
@@ -95,8 +70,26 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
     window.addEventListener('mousemove', onMouseMove, { passive: true });
     window.addEventListener('mouseleave', onMouseLeave);
 
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseleave', onMouseLeave);
+    };
+  }, [prefersReducedMotion]);
+
+  // Main animation and scroll update loop
+  useEffect(() => {
+    if (appState !== 'ready') return;
+
     let animId: number;
+    const duration = prefersReducedMotion ? 0 : 1350; // 1350ms graceful line drawing
+
     const loop = () => {
+      const now = performance.now();
+      if (animStartTimeRef.current === null) {
+        animStartTimeRef.current = now;
+      }
+
+      // Parallax smoothing
       if (parallaxWrapperRef.current) {
         const target = mouseTargetRef.current;
         const current = mouseCurrentRef.current;
@@ -111,41 +104,54 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
         parallaxWrapperRef.current.style.transform = `perspective(1200px) rotateX(${rotX.toFixed(2)}deg) rotateY(${rotY.toFixed(2)}deg) translate3d(${transX.toFixed(1)}px, ${transY.toFixed(1)}px, 0)`;
       }
 
-      // Dynamic width scaling & color transition for DOM fallback
-      if (scrollProgressRef && parallaxWrapperRef.current) {
-        const p = Math.min(Math.max(scrollProgressRef.current, 0), 1);
+      // Line drawing progression
+      const elapsed = now - animStartTimeRef.current;
+      const autoP = duration === 0 ? 1.0 : Math.min(Math.max(elapsed / duration, 0.0), 1.0);
+      // Cubic ease-out: 1 - (1 - p)^3
+      const easedAuto = 1.0 - Math.pow(1.0 - autoP, 3);
+
+      const scrollP = scrollProgressRef ? Math.min(Math.max(scrollProgressRef.current, 0.0), 1.0) : 0.0;
+      // Scroll speedup: if user immediately scrolls down, the line finishes drawing dynamically
+      const scrollBoost = Math.min(scrollP * 3.5, 1.0);
+      const drawProgress = Math.min(1.0, Math.max(easedAuto, scrollBoost));
+
+      // Update stroke dashoffset (line drawing)
+      if (strokePathRef.current) {
+        const len = pathLengthRef.current || 25000;
+        const offset = len * (1.0 - drawProgress);
+        strokePathRef.current.style.strokeDashoffset = `${offset}`;
+      }
+
+      // Update solid black fill (fades in as line drawing nears completion)
+      if (fillPathRef.current) {
+        const fillAlpha = Math.min(Math.max((drawProgress - 0.55) / 0.45, 0.0), 1.0);
+        fillPathRef.current.style.opacity = `${fillAlpha}`;
+      }
+
+      // Dynamic scale and opacity on scroll: gracefully scales from 60vw to 38vw and drops opacity to 15%
+      if (parallaxWrapperRef.current) {
         const isMobile = window.innerWidth < 768;
         const startVw = 60;
-        const endVw = isMobile ? 48 : 34;
-        const currentVw = startVw + (endVw - startVw) * p;
+        const endVw = isMobile ? 48 : 38;
+        const currentVw = startVw + (endVw - startVw) * scrollP;
         parallaxWrapperRef.current.style.width = `${currentVw}vw`;
 
-        if (pathRef.current) {
-          const colorT = Math.min(Math.max((p - 0.15) / 0.60, 0), 1);
-          const rgb = Math.round(17 + (255 - 17) * colorT);
-          pathRef.current.style.fill = `rgb(${rgb}, ${rgb}, ${rgb})`;
-        }
+        // Opacity smoothly drops from 1.0 down to 0.15 (15%) as user scrolls
+        const scrollT = Math.min(Math.max(scrollP / 0.65, 0.0), 1.0);
+        const easeT = scrollT * scrollT * (3.0 - 2.0 * scrollT);
+        const logoOpacity = 1.0 - (1.0 - 0.15) * easeT;
+        parallaxWrapperRef.current.style.opacity = `${logoOpacity.toFixed(3)}`;
       }
 
       animId = requestAnimationFrame(loop);
     };
-    animId = requestAnimationFrame(loop);
 
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseleave', onMouseLeave);
-      cancelAnimationFrame(animId);
-    };
-  }, [appState, isParallaxActive, prefersReducedMotion]);
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [appState, prefersReducedMotion, scrollProgressRef]);
 
   // Hidden during intro stages
   if (appState !== 'ready') {
-    return null;
-  }
-
-  // Seamless Handover: DOM logo unmounts ONLY when WebGL has confirmed its first ready frame is drawn.
-  // If WebGL is unavailable or lost, DOM logo remains active as fallback.
-  if (isWebGLActive && isWebGLReadyFrameDrawn) {
     return null;
   }
 
@@ -153,15 +159,14 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
     <div
       ref={containerRef}
       id="central-logo-container"
-      className="absolute inset-0 flex items-center justify-center pointer-events-none z-30 select-none overflow-hidden"
+      className="absolute inset-0 flex items-center justify-center pointer-events-none z-20 select-none overflow-hidden"
     >
-      {/* Centered with exactly 60vw width, matching viewBox aspect ratio 1920 / 787 */}
+      {/* Centered with 60vw width, matching viewBox aspect ratio 1920 / 787 */}
       <div
         ref={parallaxWrapperRef}
         id="parallax-wrapper"
         className="w-[60vw] max-h-[85dvh] aspect-[1920/787] relative flex items-center justify-center will-change-transform"
         style={{
-          opacity,
           transformOrigin: 'center center',
           transformStyle: 'preserve-3d',
         }}
@@ -173,16 +178,31 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
           role="img"
           aria-label="ArtDeejay"
         >
+          {/* Solid black fill that emerges as line drawing completes */}
           <path
-            ref={pathRef}
-            id="base-logo-path"
+            ref={fillPathRef}
+            id="base-logo-fill"
             d={LOGO_FILLED_PATH}
-            fill="#111111"
+            fill="#000000"
             fillRule="evenodd"
             clipRule="evenodd"
+            style={{ opacity: 0 }}
+          />
+
+          {/* Crisp black line drawing that outlines all letter contours */}
+          <path
+            ref={strokePathRef}
+            id="base-logo-stroke"
+            d={LOGO_FILLED_PATH}
+            fill="none"
+            stroke="#000000"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
         </svg>
       </div>
     </div>
   );
 };
+

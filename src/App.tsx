@@ -2,10 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { AutografOverlay } from './components/AutografOverlay';
-import { CentralStage } from './components/CentralStage';
+import { CentralLogo } from './components/CentralLogo';
 import { Header } from './components/Header';
 import { IntroSequence } from './components/IntroSequence';
-import { SiluetLayer } from './components/SiluetLayer';
 import { AppState, Language } from './types';
 import { ArtDeejayWebGL } from './webgl/ArtDeejayWebGL';
 
@@ -207,7 +206,20 @@ export default function App() {
           isReady ? 'sticky top-0 left-0' : 'relative'
         }`}
       >
-        {/* Layer 1 & 2: WebGL Canvas (White base + living gradient + quiet contours) (z-0) */}
+        {/* Layer 7: Minimalist Header (z-50) */}
+        <Header
+          isVisible={isReady}
+          language={language}
+          onLanguageChange={setLanguage}
+          scrollProgressRef={scrollProgressRef}
+        />
+
+        {/* WebGL Canvas:
+            Layer 1 (White base),
+            Layer 2 (Living gradient 0->1),
+            Layer 3 (Topographic lines),
+            Layer 4 (Central Logo)
+        */}
         <ArtDeejayWebGL
           appState={appState}
           prefersReducedMotion={prefersReducedMotion}
@@ -216,30 +228,16 @@ export default function App() {
           onFirstReadyFrame={handleFirstReadyFrame}
         />
 
-        {/* Layer 3: Dark fullscreen siluet (max 10% opacity, cover scaling) (z-10) */}
-        <SiluetLayer
-          appState={appState}
-          scrollProgressRef={scrollProgressRef}
-        />
-
-        {/* Layer 4 & 5: Central rectangular stage with logo and darkening overlay (z-20) */}
-        <CentralStage
+        {/* Layer 4: Central Logo (Pure black vector with line drawing, z-20) */}
+        <CentralLogo
           appState={appState}
           prefersReducedMotion={prefersReducedMotion}
           scrollProgressRef={scrollProgressRef}
         />
 
-        {/* Layer 6: Progressive Autograf Signature Overlay (z-30) */}
+        {/* Layer 5: Progressive Autograf Signature Overlay (Pure white over Logo, z-30) */}
         <AutografOverlay
           appState={appState}
-          scrollProgressRef={scrollProgressRef}
-        />
-
-        {/* Layer 7: Minimalist Header (z-50) */}
-        <Header
-          isVisible={isReady}
-          language={language}
-          onLanguageChange={setLanguage}
           scrollProgressRef={scrollProgressRef}
         />
 
