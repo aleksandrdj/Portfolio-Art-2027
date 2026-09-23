@@ -5,6 +5,7 @@ import { AppState, LiquidBlob } from '../types';
 
 interface CentralLogoProps {
   appState: AppState;
+  onThemeTransitionStart?: () => void;
   onIntroComplete: () => void;
   prefersReducedMotion: boolean;
   blobsRef?: React.MutableRefObject<LiquidBlob[]>;
@@ -14,6 +15,7 @@ interface CentralLogoProps {
 
 export const CentralLogo: React.FC<CentralLogoProps> = ({
   appState,
+  onThemeTransitionStart,
   onIntroComplete,
   prefersReducedMotion,
   blobsRef,
@@ -147,21 +149,39 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
 
   // Intro Animation Sequence (GSAP)
   useEffect(() => {
-    if (appState === 'ready' || prefersReducedMotion) {
+    if (appState === 'ready') {
       setLogoFill('#111111');
       setIntroMaskActive(false);
       return;
     }
 
-    const strokePaths = strokeElementsRef.current.filter(Boolean) as SVGPathElement[];
+    setIntroMaskActive(true);
+    setLogoFill('#FFFFFF');
+
+    let visListener: (() => void) | null = null;
+
+    // Get stroke paths, with fallback querySelector if refs not yet populated
+    let strokePaths = strokeElementsRef.current.filter(Boolean) as SVGPathElement[];
+    if (strokePaths.length === 0 && svgRef.current) {
+      strokePaths = Array.from(
+        svgRef.current.querySelectorAll('#intro-signature-mask path')
+      ) as SVGPathElement[];
+    }
+
     if (strokePaths.length === 0) return;
 
-    // Measure each stroke's total length and set stroke-dasharray / stroke-dashoffset
+    // Measure each stroke's total length safely and set initial strokeDashoffset
     const strokeLengths = strokePaths.map((path) => {
-      const len = path.getTotalLength();
-      path.style.strokeDasharray = `${len}`;
-      path.style.strokeDashoffset = `${len}`;
-      return len;
+      let len = 0;
+      try {
+        len = path.getTotalLength();
+      } catch {
+        len = 300;
+      }
+      const safeLen = len > 1 ? len : 300;
+      path.style.strokeDasharray = `${safeLen}`;
+      path.style.strokeDashoffset = `${safeLen}`;
+      return safeLen;
     });
 
     const tip = tipRef.current;
@@ -169,7 +189,12 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
 
     // Position glowing tip at start of the first stroke
     if (strokePaths[0] && tip && tipGlow) {
-      const startPt = strokePaths[0].getPointAtLength(0);
+      let startPt = { x: 106, y: 148 };
+      try {
+        startPt = strokePaths[0].getPointAtLength(0);
+      } catch {
+        // use fallback start coordinates
+      }
       tip.setAttribute('cx', `${startPt.x}`);
       tip.setAttribute('cy', `${startPt.y}`);
       tipGlow.setAttribute('cx', `${startPt.x}`);
@@ -179,11 +204,11 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
     }
 
     // Build Master Timeline
-    // 0 - 0.15s: black screen
-    // 0.15 - 2.5s: stroke drawing with glowing tip
-    // 2.5 - 2.85s: glow fades out, white logo holds
-    // 2.85 - 3.65s: theme transition (bg black -> white, logo white -> black)
-    // 3.65s: onComplete -> ready
+    // 0 - 0.15s: clean black screen
+    // 0.15 - 2.45s: signature stroke drawing with glowing tip
+    // 2.45 - 2.75s: glow fades out, white signature logo holds on black
+    // 2.75 - 3.55s: theme transition (bg black -> white, logo white -> #111111)
+    // 3.55s: onComplete -> ready
     const tl = gsap.timeline({
       onComplete: () => {
         setIntroMaskActive(false);
@@ -193,10 +218,10 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
     });
     introTlRef.current = tl;
 
-    // Initial brief hold (0.15s)
+    // Initial hold on black screen (0.15s)
     tl.to({}, { duration: 0.15 });
 
-    // Fade in glowing tip
+    // Fade in glowing brush tip
     if (tip && tipGlow) {
       tl.to([tip, tipGlow], {
         opacity: 1,
@@ -205,12 +230,12 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
       });
     }
 
-    // Total draw duration: 2.25s (from 0.25s to 2.5s)
+    // Total draw duration: 2.25s
     const TOTAL_DRAW_TIME = 2.25;
 
-    // Chain each stroke sequentially
+    // Chain each calligraphy stroke sequentially
     strokePaths.forEach((path, idx) => {
-      const info = REVEAL_STROKE_PATHS[idx];
+      const info = REVEAL_STROKE_PATHS[idx] || { durationRatio: 1 / strokePaths.length };
       const len = strokeLengths[idx];
       const duration = TOTAL_DRAW_TIME * info.durationRatio;
 
@@ -227,11 +252,15 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
             path.style.strokeDashoffset = `${len - currentLen}`;
 
             if (tip && tipGlow) {
-              const pt = path.getPointAtLength(currentLen);
-              tip.setAttribute('cx', `${pt.x}`);
-              tip.setAttribute('cy', `${pt.y}`);
-              tipGlow.setAttribute('cx', `${pt.x}`);
-              tipGlow.setAttribute('cy', `${pt.y}`);
+              try {
+                const pt = path.getPointAtLength(currentLen);
+                tip.setAttribute('cx', `${pt.x}`);
+                tip.setAttribute('cy', `${pt.y}`);
+                tipGlow.setAttribute('cx', `${pt.x}`);
+                tipGlow.setAttribute('cy', `${pt.y}`);
+              } catch {
+                // ignore
+              }
             }
           },
         },
@@ -239,7 +268,7 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
       );
     });
 
-    // 2.5 - 2.85s: Fade out glowing tip and brief hold on white logo
+    // Fade out glowing tip and brief hold on white logo on pure black
     if (tip && tipGlow) {
       tl.to(
         [tip, tipGlow],
@@ -251,30 +280,25 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
         '+=0.05'
       );
     }
-    // Hold white logo cleanly on black
     tl.to({}, { duration: 0.15 });
 
-    // 2.85 - 3.65s: Coordinated theme transition
-    // As mandated: background becomes white, logo becomes #111111 without getting lost in gray
+    // Coordinated theme transition (black background -> white, logo white -> #111111)
     tl.to(
       {},
       {
-        duration: 0.75,
+        duration: 0.8,
         ease: 'power2.inOut',
         onStart: () => {
-          // Tell parent to start background transition to white
-          document.documentElement.classList.add('transition-theme-white');
+          if (onThemeTransitionStart) {
+            onThemeTransitionStart();
+          }
         },
         onUpdate: function () {
           const p = this.progress();
-          // Delay logo color flip slightly so background is already bright enough
-          // p from 0 to 0.4: stays #ffffff
-          // p from 0.4 to 1.0: transitions smoothly from #ffffff to #111111
           if (p < 0.35) {
             setLogoFill('#FFFFFF');
           } else {
             const colorProgress = (p - 0.35) / 0.65;
-            // Interpolate rgb(255, 255, 255) to rgb(17, 17, 17)
             const v = Math.round(255 - colorProgress * (255 - 17));
             const hex = `#${v.toString(16).padStart(2, '0')}${v.toString(16).padStart(2, '0')}${v.toString(16).padStart(2, '0')}`;
             setLogoFill(hex);
@@ -283,10 +307,28 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
       }
     );
 
+    // If tab or iframe is hidden, wait for visibility before playing intro
+    if (typeof document !== 'undefined' && document.hidden) {
+      tl.pause();
+      visListener = () => {
+        if (!document.hidden) {
+          if (visListener) {
+            document.removeEventListener('visibilitychange', visListener);
+            visListener = null;
+          }
+          tl.play();
+        }
+      };
+      document.addEventListener('visibilitychange', visListener);
+    }
+
     return () => {
       tl.kill();
+      if (visListener) {
+        document.removeEventListener('visibilitychange', visListener);
+      }
     };
-  }, [appState, prefersReducedMotion, onIntroComplete]);
+  }, [appState, prefersReducedMotion, onThemeTransitionStart, onIntroComplete]);
 
   if (appState === 'ready' && isWebGLActive) {
     return null;

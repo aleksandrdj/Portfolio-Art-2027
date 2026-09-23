@@ -122,7 +122,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       lastTime = now;
 
       // Update opacity transition when ready
-      if (appState === 'ready') {
+      if (appState === 'ready' || appState === 'theme-transition') {
         opacityRef.current = Math.min(1.0, opacityRef.current + dt * 1.5);
       } else {
         opacityRef.current = 0.0;
@@ -191,7 +191,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
           canvas.height,
           parallaxPixels,
           rotationAngles,
-          currentOpacity,
+          1.0,
           [17 / 255, 17 / 255, 17 / 255]
         );
       }
@@ -218,11 +218,12 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     <canvas
       ref={canvasRef}
       id="artdeejay-webgl-canvas"
-      className="fixed inset-0 w-full h-full pointer-events-none z-10 block"
+      className="fixed inset-0 w-full h-full pointer-events-none z-10 block transition-opacity duration-700"
       style={{
         width: '100%',
         height: '100%',
         touchAction: 'none',
+        opacity: appState === 'ready' || appState === 'theme-transition' ? 1 : 0,
       }}
     />
   );

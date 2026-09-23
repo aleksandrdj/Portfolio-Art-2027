@@ -83,15 +83,10 @@ void main() {
   // Combine background and contours
   vec3 backgroundWithContours = mix(bgColor, lineColor, lineAlpha * u_opacity);
 
-  // Fluid velocity & trail mask
+  // Fluid velocity & compact trail mask (strictly <= 15% of screen)
   vec2 v = texture(u_velocity, uv).xy;
   float speed = length(v);
-  vec3 encoded = vec3(v * 0.5 + 0.5, 1.0);
-  vec3 flowColor = mix(vec3(1.0), encoded, speed);
-
-  float signal = 1.0 - flowColor.r;
-  float aa = max(fwidth(signal), 0.001);
-  float mask = smoothstep(0.1 - aa, 0.1 + aa, signal);
+  float mask = smoothstep(0.08, 0.40, speed);
 
   // Trail color depending on background region
   vec3 trailColor = mix(trailLight, trailDark, region);

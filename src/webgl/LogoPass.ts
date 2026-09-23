@@ -72,12 +72,7 @@ void main() {
   // Fluid velocity & mask derivation
   vec2 v = texture(u_velocity, screenUV).xy;
   float speed = length(v);
-  vec3 encoded = vec3(v * 0.5 + 0.5, 1.0);
-  vec3 flowColor = mix(vec3(1.0), encoded, speed);
-
-  float signal = 1.0 - flowColor.r;
-  float aa = max(fwidth(signal), 0.001);
-  float mask = smoothstep(0.1 - aa, 0.1 + aa, signal);
+  float mask = smoothstep(0.08, 0.40, speed);
 
   // Logo color: black in normal state, inverted white inside the liquid mask
   vec3 whiteLogo = vec3(1.0, 1.0, 1.0);

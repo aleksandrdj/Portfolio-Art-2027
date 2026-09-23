@@ -143,13 +143,15 @@ export class FluidSimulation {
   // Buffer dimensions
   public simWidth = 0;
   public simHeight = 0;
+  public viewportWidth = 1920;
+  public viewportHeight = 1080;
 
-  // Parameters
+  // Parameters tuned for compact, elegant fluid trail (max ~12-14% of screen)
   public resolution = 0.1;
   public dt = 0.014;
-  public dissipation = 0.96;
-  public mouseForce = 50.0;
-  public cursorSize = 18.0;
+  public dissipation = 0.91;
+  public mouseForce = 22.0;
+  public cursorRelativeRadius = 0.055; // 5.5% radius => 11% diameter, strictly <= 15%
   public iterationsPoisson = 4;
   public straightness = 1.0;
 
@@ -239,6 +241,8 @@ export class FluidSimulation {
   }
 
   public resize(viewportWidth: number, viewportHeight: number) {
+    this.viewportWidth = viewportWidth;
+    this.viewportHeight = viewportHeight;
     const gl = this.gl;
     const W = Math.max(16, Math.round(viewportWidth * this.resolution));
     const H = Math.max(16, Math.round(viewportHeight * this.resolution));
@@ -276,6 +280,12 @@ export class FluidSimulation {
     const ratioX = maxWH / W;
     const ratioY = maxWH / H;
 
+    // Isotropic circular splat footprint in UV space (constrained strictly <= 15% of screen)
+    const minDim = Math.min(this.viewportWidth, this.viewportHeight);
+    const radiusPx = minDim * this.cursorRelativeRadius;
+    const splatRadiusUV_X = radiusPx / Math.max(1, this.viewportWidth);
+    const splatRadiusUV_Y = radiusPx / Math.max(1, this.viewportHeight);
+
     gl.bindVertexArray(this.quadVAO);
     gl.viewport(0, 0, W, H);
 
@@ -308,7 +318,7 @@ export class FluidSimulation {
       gl.uniform1i(this.locSplatVel, 0);
       gl.uniform2f(this.locSplatCursorUV, splat.cursorUV[0], splat.cursorUV[1]);
       gl.uniform2f(this.locSplatForce, splat.force[0], splat.force[1]);
-      gl.uniform2f(this.locSplatCursorSizePx, this.cursorSize * pxX, this.cursorSize * pxY);
+      gl.uniform2f(this.locSplatCursorSizePx, splatRadiusUV_X, splatRadiusUV_Y);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
       curVel = nextVel;

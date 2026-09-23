@@ -1,19 +1,16 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { CentralLogo } from './components/CentralLogo';
 import { Header } from './components/Header';
 import { AppState, Language } from './types';
 import { ArtDeejayWebGL } from './webgl/ArtDeejayWebGL';
 
-export default function App() {
-  // Check if intro has already run in this session
-  const [hasSeenIntro] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem('artdeejay_intro_done') === 'true';
-    } catch {
-      return false;
-    }
-  });
+declare global {
+  interface Window {
+    replayIntro?: () => void;
+  }
+}
 
+export default function App() {
   // Check prefers-reduced-motion
   const [prefersReducedMotion] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -23,12 +20,11 @@ export default function App() {
   });
 
   // State: 'intro' | 'theme-transition' | 'ready'
-  const [appState, setAppState] = useState<AppState>(() => {
-    if (hasSeenIntro || prefersReducedMotion) {
-      return 'ready';
-    }
-    return 'intro';
-  });
+  // In development, always play intro on every reload
+  const [appState, setAppState] = useState<AppState>('intro');
+
+  // Key to force-remount intro component when replayed
+  const [introKey, setIntroKey] = useState<number>(0);
 
   // Language state (persists across sessions, does not restart intro)
   const [language, setLanguage] = useState<Language>(() => {
@@ -51,19 +47,43 @@ export default function App() {
     }
   }, [language]);
 
-  // Transition from intro to ready
+  // Transition from stroke drawing to theme transition (black -> white)
+  const handleThemeTransitionStart = useCallback(() => {
+    setAppState('theme-transition');
+  }, []);
+
+  // Transition from theme transition to full ready state
   const handleIntroComplete = useCallback(() => {
     setAppState('ready');
-    try {
-      sessionStorage.setItem('artdeejay_intro_done', 'true');
-    } catch {
-      // ignore
-    }
   }, []);
+
+  // Replay function accessible globally and via 'R' key
+  const replayIntro = useCallback(() => {
+    setAppState('intro');
+    setIntroKey((k) => k + 1);
+  }, []);
+
+  useEffect(() => {
+    window.replayIntro = replayIntro;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Replay intro if user presses 'R' outside input/textarea
+      if (
+        (e.key === 'r' || e.key === 'R') &&
+        !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
+      ) {
+        replayIntro();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      delete window.replayIntro;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [replayIntro]);
 
   // Sync body background color
   useEffect(() => {
-    if (appState === 'ready') {
+    if (appState === 'ready' || appState === 'theme-transition') {
       document.body.style.backgroundColor = '#FFFFFF';
     } else {
       document.body.style.backgroundColor = '#000000';
@@ -74,7 +94,7 @@ export default function App() {
     <div
       id="portfolio-screen"
       className={`relative w-full h-[100svh] min-h-[100svh] overflow-hidden select-none transition-bg ${
-        appState === 'ready' ? 'bg-ready' : 'bg-intro'
+        appState === 'ready' || appState === 'theme-transition' ? 'bg-ready' : 'bg-intro'
       }`}
     >
       {/* Layer 1: Minimalist Header (z-50) */}
@@ -90,9 +110,11 @@ export default function App() {
         prefersReducedMotion={prefersReducedMotion}
       />
 
-      {/* Layer 3: Intro Calligraphy Signature Reveal (active during intro, hides when ready) (z-30) */}
+      {/* Layer 3: Intro Calligraphy Signature Reveal (active during intro & theme transition) (z-30) */}
       <CentralLogo
+        key={introKey}
         appState={appState}
+        onThemeTransitionStart={handleThemeTransitionStart}
         onIntroComplete={handleIntroComplete}
         prefersReducedMotion={prefersReducedMotion}
         isWebGLActive={true}
