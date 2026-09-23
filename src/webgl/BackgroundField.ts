@@ -16,6 +16,7 @@ precision highp float;
 
 in vec2 v_uv;
 
+uniform sampler2D u_fluidMask;
 uniform vec2 u_resolution;
 uniform float u_time;
 uniform float u_opacity;
@@ -81,7 +82,7 @@ void main() {
 
   // Base background distribution: lighter cyan-blue at top/sides, deep blue in middle, dark blue-green at bottom
   vec3 livingGradient = mix(colDark, colDeep, smoothstep(0.05, 0.75, uv.y));
-  float wBright = smoothstep(0.95, 0.15, d1) * 0.85 + smoothstep(0.3, 1.0, uv.y) * 0.25;
+  float wBright = (1.0 - smoothstep(0.15, 0.95, d1)) * 0.85 + smoothstep(0.3, 1.0, uv.y) * 0.25;
   livingGradient = mix(livingGradient, colBright, clamp(wBright + gradNoise * 0.15, 0.0, 1.0));
 
   // Blend from pure white base to living gradient according to scroll progress (0.0 -> 1.0)
@@ -102,6 +103,8 @@ void main() {
 
   vec3 backgroundWithContours = mix(baseBg, lineColor, currentLineAlpha);
 
+  float liquid = texture(u_fluidMask, uv).r * (1.0 - smoothstep(0.0, 0.18, u_scrollProgress));
+  backgroundWithContours = mix(backgroundWithContours, vec3(0.86, 0.87, 0.88), liquid * u_opacity);
   fragColor = vec4(backgroundWithContours, 1.0);
 }
 `;
@@ -112,6 +115,7 @@ export class BackgroundField {
   private quadBuffer: WebGLBuffer;
   private program: WebGLProgram;
 
+  private locFluidMask: WebGLUniformLocation | null = null;
   private locResolution: WebGLUniformLocation | null = null;
   private locTime: WebGLUniformLocation | null = null;
   private locOpacity: WebGLUniformLocation | null = null;
@@ -125,6 +129,7 @@ export class BackgroundField {
     this.quadBuffer = quad.buffer;
 
     this.program = createProgram(gl, VS_COMPOSITE, FS_BACKGROUND_COMPOSITE);
+    this.locFluidMask = gl.getUniformLocation(this.program, 'u_fluidMask');
     this.locResolution = gl.getUniformLocation(this.program, 'u_resolution');
     this.locTime = gl.getUniformLocation(this.program, 'u_time');
     this.locOpacity = gl.getUniformLocation(this.program, 'u_opacity');
@@ -133,6 +138,7 @@ export class BackgroundField {
   }
 
   public render(
+    fluidMask: WebGLTexture | null,
     width: number,
     height: number,
     time: number,
@@ -145,6 +151,9 @@ export class BackgroundField {
     gl.useProgram(this.program);
     gl.bindVertexArray(this.quadVAO);
 
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, fluidMask);
+    gl.uniform1i(this.locFluidMask, 0);
     gl.uniform2f(this.locResolution, width, height);
     gl.uniform1f(this.locTime, time);
     gl.uniform1f(this.locOpacity, opacity);

@@ -114,6 +114,7 @@ export class IdleController {
   }
 
   public onPointerDown(clientX: number, clientY: number, width: number, height: number) {
+    this.onMouseLeave();
     this.onPointerMove(clientX, clientY, width, height);
     if (this.isAutonomousActive) {
       this.isAutonomousActive = false;

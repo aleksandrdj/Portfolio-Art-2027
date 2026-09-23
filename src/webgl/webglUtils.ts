@@ -79,8 +79,6 @@ export function checkFloatFboSupport(gl: WebGL2RenderingContext): {
   linearSupported: boolean;
 } {
   const extFloat = gl.getExtension('EXT_color_buffer_float');
-  const extHalfFloatLinear = gl.getExtension('OES_texture_half_float_linear');
-  const extFloatLinear = gl.getExtension('OES_texture_float_linear');
 
   if (!extFloat) {
     return {
@@ -98,7 +96,8 @@ export function checkFloatFboSupport(gl: WebGL2RenderingContext): {
     internalFormat: gl.RGBA16F,
     format: gl.RGBA,
     type: gl.HALF_FLOAT,
-    linearSupported: !!(extHalfFloatLinear || extFloatLinear),
+    // RGBA16F + HALF_FLOAT is linearly filterable in WebGL2 core.
+    linearSupported: true,
   };
 }
 
