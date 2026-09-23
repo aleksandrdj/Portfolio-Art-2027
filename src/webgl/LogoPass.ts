@@ -155,26 +155,20 @@ export class LogoPass {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // 1. Immediately rasterize the exact vector path so texture is ready synchronously
+    this.renderPathToCanvas(ctx, canvas);
+    this.uploadCanvasToTexture(canvas);
 
+    // 2. Also load /Logo_ArtDeejay.svg image to ensure native browser SVG rasterization
     if (typeof Image !== 'undefined') {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Draw white mask from original SVG
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         this.uploadCanvasToTexture(canvas);
       };
-      img.onerror = () => {
-        // Fallback to path rendering
-        this.renderPathToCanvas(ctx, canvas);
-        this.uploadCanvasToTexture(canvas);
-      };
       img.src = '/Logo_ArtDeejay.svg';
-    } else {
-      this.renderPathToCanvas(ctx, canvas);
-      this.uploadCanvasToTexture(canvas);
     }
   }
 

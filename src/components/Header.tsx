@@ -1,5 +1,4 @@
 import React from 'react';
-import { LOGO_FILLED_PATH, LOGO_VIEWBOX } from '../data/logoData';
 import { Language } from '../types';
 
 interface HeaderProps {
@@ -24,28 +23,14 @@ export const Header: React.FC<HeaderProps> = ({
       aria-hidden={!isVisible}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Left: Compact original SVG brand mark */}
+        {/* Left: Author name strictly as specified */}
         <div className="flex items-center">
-          <div
-            id="brand-mark"
-            className="h-6 md:h-7 flex items-center text-neutral-900"
-            role="img"
-            aria-label="ArtDeejay"
+          <span
+            id="brand-author-name"
+            className="text-[14px] md:text-[16px] font-medium text-neutral-900 tracking-tight font-sans select-none"
           >
-            <svg
-              viewBox={LOGO_VIEWBOX}
-              className="h-full w-auto block fill-current"
-              style={{ aspectRatio: '1920 / 787' }}
-              aria-hidden="true"
-            >
-              <path
-                d={LOGO_FILLED_PATH}
-                fillRule="evenodd"
-                clipRule="evenodd"
-              />
-            </svg>
-            <h1 className="sr-only">ArtDeejay</h1>
-          </div>
+            Alexsandr Savenkov
+          </span>
         </div>
 
         {/* Right: Inactive nav items + language toggle */}

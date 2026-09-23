@@ -22,64 +22,50 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Mutable refs for state without breaking WebGL lifecycle
+  // Latest props refs to avoid tearing down WebGL on React state toggles
   const appStateRef = useRef<AppState>(appState);
+  appStateRef.current = appState;
+
   const prefersReducedMotionRef = useRef<boolean>(prefersReducedMotion);
-  const onWebGLReadyRef = useRef(onWebGLReady);
+  prefersReducedMotionRef.current = prefersReducedMotion;
+
   const onFirstReadyFrameRef = useRef(onFirstReadyFrame);
+  onFirstReadyFrameRef.current = onFirstReadyFrame;
 
-  useEffect(() => {
-    appStateRef.current = appState;
-  }, [appState]);
+  const onWebGLReadyRef = useRef(onWebGLReady);
+  onWebGLReadyRef.current = onWebGLReady;
 
-  useEffect(() => {
-    prefersReducedMotionRef.current = prefersReducedMotion;
-  }, [prefersReducedMotion]);
-
-  useEffect(() => {
-    onWebGLReadyRef.current = onWebGLReady;
-  }, [onWebGLReady]);
-
-  useEffect(() => {
-    onFirstReadyFrameRef.current = onFirstReadyFrame;
-  }, [onFirstReadyFrame]);
-
-  // Parallax tracking
-  const mouseTargetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const mouseCurrentRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const mouseTargetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isTouchRef = useRef(false);
 
-  useEffect(() => {
-    isTouchRef.current =
-      typeof window !== 'undefined' &&
-      ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-  }, []);
-
-  // WebGL Engine
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    let gl: WebGL2RenderingContext | null = null;
-    try {
-      gl = canvas.getContext('webgl2', {
-        alpha: false,
-        antialias: false,
-        depth: false,
-        stencil: false,
-        powerPreference: 'high-performance',
-        preserveDrawingBuffer: false,
-      });
-    } catch {
-      gl = null;
-    }
+    // Detect touch capability
+    isTouchRef.current =
+      'ontouchstart' in window ||
+      navigator.maxTouchPoints > 0 ||
+      window.matchMedia('(pointer: coarse)').matches;
+
+    // Initialize WebGL2 context
+    const gl = canvas.getContext('webgl2', {
+      alpha: true,
+      antialias: true,
+      depth: false,
+      stencil: false,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: false,
+    });
 
     if (!gl) {
-      console.warn('WebGL2 unavailable; falling back to DOM SVG.');
+      console.warn('WebGL2 not supported on this device; running in DOM fallback mode.');
       onWebGLReadyRef.current?.(false);
       return;
     }
 
+    // Viewport dimensions & DPR
     let width = window.innerWidth;
     let height = window.innerHeight;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -87,6 +73,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
 
+    // Sub-renderers & passes
     let fluidSim: FluidSimulation | null = null;
     let fluidMaskPass: FluidMaskPass | null = null;
     let bgField: BackgroundField | null = null;
@@ -94,8 +81,27 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     let idleController: IdleController | null = null;
     let zeroTex: WebGLTexture | null = null;
 
-    const initEngine = () => {
-      if (!gl) return false;
+    try {
+      fluidSim = new FluidSimulation(gl, width, height);
+      fluidMaskPass = new FluidMaskPass(gl, canvas.width, canvas.height);
+      bgField = new BackgroundField(gl);
+      logoPass = new LogoPass(gl);
+      idleController = new IdleController();
+      zeroTex = createZeroTexture(gl);
+      onWebGLReadyRef.current?.(true);
+    } catch (e) {
+      console.error('Error initializing WebGL pipelines:', e);
+      onWebGLReadyRef.current?.(false);
+      return;
+    }
+
+    // Context loss / restoration handling
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      cleanupEngine();
+    };
+
+    const handleContextRestored = () => {
       try {
         fluidSim = new FluidSimulation(gl, width, height);
         fluidMaskPass = new FluidMaskPass(gl, canvas.width, canvas.height);
@@ -103,15 +109,8 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
         logoPass = new LogoPass(gl);
         idleController = new IdleController();
         zeroTex = createZeroTexture(gl);
-
-        if (logoPass.isTextureReady) {
-          onWebGLReadyRef.current?.(true);
-        }
-        return true;
       } catch (err) {
-        console.error('Failed to initialize WebGL modules:', err);
-        onWebGLReadyRef.current?.(false);
-        return false;
+        console.error('Failed to reinitialize after context restore:', err);
       }
     };
 
@@ -120,41 +119,13 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       fluidMaskPass?.dispose();
       bgField?.dispose();
       logoPass?.dispose();
-      if (zeroTex && gl) gl.deleteTexture(zeroTex);
+      if (zeroTex) gl.deleteTexture(zeroTex);
       fluidSim = null;
       fluidMaskPass = null;
       bgField = null;
       logoPass = null;
-      idleController = null;
       zeroTex = null;
-    };
-
-    const success = initEngine();
-    if (!success) return;
-
-    // Context loss & restore handlers (Requirement 8)
-    const handleContextLost = (e: Event) => {
-      e.preventDefault();
-      console.warn('WebGL context lost — switching immediately to DOM fallback.');
-      onWebGLReadyRef.current?.(false);
-      cleanupEngine();
-    };
-
-    const handleContextRestored = () => {
-      console.info('WebGL context restored — re-initializing engine.');
-      const restored = initEngine();
-      if (restored) {
-        // Render a test frame to ensure stability before handing back control
-        try {
-          if (gl) {
-            gl.clearColor(1, 1, 1, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-          }
-          onWebGLReadyRef.current?.(true);
-        } catch {
-          onWebGLReadyRef.current?.(false);
-        }
-      }
+      idleController = null;
     };
 
     canvas.addEventListener('webglcontextlost', handleContextLost);
@@ -174,25 +145,37 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
 
     window.addEventListener('resize', handleResize);
 
-    // Mouse handlers
-    const handleMouseMove = (e: MouseEvent) => {
+    // Pointer event handlers (passive, does not block scrolling)
+    const handlePointerMove = (e: PointerEvent) => {
       if (appStateRef.current !== 'ready') return;
-      idleController?.onMouseMove(e.clientX, e.clientY, width, height);
+      idleController?.onPointerMove(e.clientX, e.clientY, width, height);
 
-      if (!isTouchRef.current && !prefersReducedMotionRef.current) {
+      if (e.pointerType === 'mouse' && !isTouchRef.current && !prefersReducedMotionRef.current) {
         const nx = (e.clientX / width) * 2 - 1;
         const ny = (e.clientY / height) * 2 - 1;
         mouseTargetRef.current = { x: nx, y: ny };
       }
     };
 
-    const handleMouseLeave = () => {
+    const handlePointerDown = (e: PointerEvent) => {
+      if (appStateRef.current !== 'ready') return;
+      idleController?.onPointerDown(e.clientX, e.clientY, width, height);
+    };
+
+    const handlePointerLeave = () => {
       idleController?.onMouseLeave();
       mouseTargetRef.current = { x: 0, y: 0 };
     };
 
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
-    window.addEventListener('mouseleave', handleMouseLeave);
+    const handleScrollOrTouch = () => {
+      idleController?.onScrollOrTouch();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    window.addEventListener('pointerleave', handlePointerLeave);
+    window.addEventListener('scroll', handleScrollOrTouch, { passive: true });
+    window.addEventListener('touchmove', handleScrollOrTouch, { passive: true });
 
     // Visibility handling
     let isTabHidden = document.hidden;
@@ -212,6 +195,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     // Smooth fade-in for background contour lines when entering ready state
     let bgOpacity = 0.0;
     let readyFrameDispatched = false;
+    let prevAppState: AppState = appStateRef.current;
 
     const render = (now: number) => {
       if (isTabHidden) {
@@ -227,6 +211,14 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
 
       const currentAppState = appStateRef.current;
       const currentReducedMotion = prefersReducedMotionRef.current;
+
+      // Detect transition to ready state to start timers from state 'ready'
+      if (prevAppState !== currentAppState) {
+        if (currentAppState === 'ready') {
+          idleController?.onStateReady(now);
+        }
+        prevAppState = currentAppState;
+      }
 
       // Parallax lerp
       if (!isTouchRef.current && !currentReducedMotion && currentAppState === 'ready') {
@@ -255,12 +247,13 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
         accumulatedSimTime += dt;
         let steps = 0;
 
+        const radiusPx = fluidSim.getRadiusPx(width, height);
+
         while (accumulatedSimTime >= SIM_DT && steps < MAX_CATCHUP) {
-          const splatInput = steps === 0
-            ? idleController.consumeSimulationStep(now, fluidSim.mouseForce)
-            : null;
-          const splats = splatInput ? [splatInput] : [];
-          fluidSim.step(splats);
+          const splats = steps === 0
+            ? idleController.consumeSimulationStep(now, fluidSim.mouseForce, radiusPx, width, height)
+            : [];
+          fluidSim.step(splats, width, height);
           accumulatedSimTime -= SIM_DT;
           steps++;
         }
@@ -273,12 +266,13 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       // Render Passes
       if (currentAppState === 'ready' && bgField && logoPass && fluidMaskPass && idleController) {
         const snapshot = idleController.getRenderSnapshot(now);
-        const velocityTex = (fluidSim && fluidSim.isSupported)
-          ? fluidSim.getVelocityTexture()
+        // Sample scalar density field (isotropic and symmetric in all directions)
+        const densityTex = (fluidSim && fluidSim.isSupported)
+          ? fluidSim.getDensityTexture()
           : zeroTex;
 
         // 1. FluidMaskPass: Computes unified liquid mask in screen coordinates
-        const fluidMaskTex = fluidMaskPass.render(velocityTex, canvas.width, canvas.height);
+        const fluidMaskTex = fluidMaskPass.render(densityTex, canvas.width, canvas.height);
 
         const simTime = currentReducedMotion ? 0.0 : now * 0.001;
 
@@ -316,8 +310,8 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
           [17 / 255, 17 / 255, 17 / 255]
         );
 
-        // Notify parent that first ready frame with logo is on screen
-        if (!readyFrameDispatched) {
+        // Notify parent only after logoPass texture is ready AND actual rendering succeeded
+        if (!readyFrameDispatched && logoPass.isTextureReady) {
           readyFrameDispatched = true;
           onFirstReadyFrameRef.current?.();
         }
@@ -331,8 +325,11 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseleave', handleMouseLeave);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerleave', handlePointerLeave);
+      window.removeEventListener('scroll', handleScrollOrTouch);
+      window.removeEventListener('touchmove', handleScrollOrTouch);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       canvas.removeEventListener('webglcontextlost', handleContextLost);
       canvas.removeEventListener('webglcontextrestored', handleContextRestored);
@@ -350,8 +347,6 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
         width: '100%',
         height: '100%',
         touchAction: 'none',
-        // Canvas is immediately visible when ready (no 700ms canvas fade-out that blanks the logo!)
-        // Background lines internally fade in over 700ms matching the header.
         display: appState === 'ready' ? 'block' : 'none',
       }}
     />

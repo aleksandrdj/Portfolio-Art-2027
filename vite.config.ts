@@ -1,11 +1,33 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { fileURLToPath } from 'url';
+import { defineConfig } from 'vite';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function syncLogoDataPlugin() {
+  return {
+    name: 'sync-logo-data',
+    buildStart() {
+      try {
+        const svgPath = path.resolve(__dirname, 'public/Logo_ArtDeejay.svg');
+        const scriptPath = path.resolve(__dirname, 'scripts/extractLogo.mjs');
+        if (fs.existsSync(svgPath) && fs.existsSync(scriptPath)) {
+          import('./scripts/extractLogo.mjs');
+        }
+      } catch (err) {
+        console.warn('Could not sync logo data:', err);
+      }
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [syncLogoDataPlugin(), react(), tailwindcss()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -13,7 +35,7 @@ export default defineConfig(() => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},

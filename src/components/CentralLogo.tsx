@@ -177,8 +177,13 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
       );
     }
 
-    // 5. Brief hold on white signature over black (0.15s)
-    tl.to({}, { duration: 0.15 });
+    // Fully unmask logo before hold & theme transition as required
+    tl.call(() => {
+      setIntroMaskActive(false);
+    });
+
+    // 5. Brief hold on white signature over black (0.2s)
+    tl.to({}, { duration: 0.2 });
 
     // 6. Theme transition (0.8s): black background transitions to white, logo to #111111
     tl.to(

@@ -14,23 +14,18 @@ const FS_FLUID_MASK = /* glsl */ `#version 300 es
 precision highp float;
 
 in vec2 v_uv;
-uniform sampler2D u_velocity;
+uniform sampler2D u_density;
 out vec4 fragColor;
 
 void main() {
-  vec2 v = texture(u_velocity, v_uv).xy;
-  float speed = length(v);
-  vec3 encoded = vec3(v * 0.5 + 0.5, 1.0);
-  vec3 flowColor = mix(vec3(1.0), encoded, speed);
+  // Sample scalar dye / density field directly (isotropic in all directions)
+  float density = texture(u_density, v_uv).r;
 
-  // Exact signal formulation specified in design:
-  // signal = 1.0 - flowColor.r
-  float signal = 1.0 - flowColor.r;
-
-  // Sharp anti-aliased threshold edge around 0.1 using fwidth
-  // Eliminates fuzzy halos and wide smoothstep banding
-  float aa = max(fwidth(signal), 0.001);
-  float mask = smoothstep(0.1 - aa, 0.1 + aa, signal);
+  // Single unified fluidMask threshold with fwidth anti-aliased edge
+  // Smoothly anti-aliased exactly at threshold boundary without blurring the whole fluid body
+  float threshold = 0.12;
+  float aa = max(fwidth(density), 0.0015);
+  float mask = smoothstep(threshold - aa, threshold + aa, density);
 
   fragColor = vec4(mask, mask, mask, 1.0);
 }
@@ -44,7 +39,7 @@ export class FluidMaskPass {
   private fbo: FBO | null = null;
   private fboConfig: ReturnType<typeof checkFloatFboSupport>;
 
-  private locVelocity: WebGLUniformLocation | null = null;
+  private locDensity: WebGLUniformLocation | null = null;
 
   constructor(gl: WebGL2RenderingContext, width: number, height: number) {
     this.gl = gl;
@@ -55,7 +50,7 @@ export class FluidMaskPass {
     this.quadBuffer = quad.buffer;
 
     this.program = createProgram(gl, VS_QUAD, FS_FLUID_MASK);
-    this.locVelocity = gl.getUniformLocation(this.program, 'u_velocity');
+    this.locDensity = gl.getUniformLocation(this.program, 'u_density');
 
     this.resize(width, height);
   }
@@ -82,7 +77,7 @@ export class FluidMaskPass {
     }
   }
 
-  public render(velocityTex: WebGLTexture | null, width: number, height: number): WebGLTexture | null {
+  public render(densityTex: WebGLTexture | null, width: number, height: number): WebGLTexture | null {
     if (!this.fbo) return null;
     const gl = this.gl;
 
@@ -93,19 +88,16 @@ export class FluidMaskPass {
     gl.bindVertexArray(this.quadVAO);
 
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, velocityTex);
-    gl.uniform1i(this.locVelocity, 0);
+    gl.bindTexture(gl.TEXTURE_2D, densityTex);
+    gl.uniform1i(this.locDensity, 0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    gl.bindVertexArray(null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindVertexArray(null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
 
     return this.fbo.texture;
-  }
-
-  public getMaskTexture(): WebGLTexture | null {
-    return this.fbo ? this.fbo.texture : null;
   }
 
   public dispose() {
