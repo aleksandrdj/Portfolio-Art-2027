@@ -147,7 +147,6 @@ export class LogoPass {
   }
 
   public generateLogoTexture() {
-    const gl = this.gl;
     const canvas = document.createElement('canvas');
     // High-resolution rasterization based on original viewBox 1920x787
     canvas.width = 2048;
@@ -155,30 +154,38 @@ export class LogoPass {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 1. Immediately rasterize the exact vector path so texture is ready synchronously
-    this.renderPathToCanvas(ctx, canvas);
-    this.uploadCanvasToTexture(canvas);
-
-    // 2. Also load /Logo_ArtDeejay.svg image to ensure native browser SVG rasterization
+    // Direct browser native SVG rasterization from /logo/Logo_ArtDeejay.svg
     if (typeof Image !== 'undefined') {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         this.uploadCanvasToTexture(canvas);
       };
-      img.src = '/Logo_ArtDeejay.svg';
+      img.onerror = () => {
+        // Fallback: render vector path if image loading fails
+        this.renderPathToCanvas(ctx, canvas);
+        this.uploadCanvasToTexture(canvas);
+      };
+      img.src = '/logo/Logo_ArtDeejay.svg';
+    } else {
+      this.renderPathToCanvas(ctx, canvas);
+      this.uploadCanvasToTexture(canvas);
     }
   }
 
   private renderPathToCanvas(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
     const scale = canvas.width / ORIGINAL_VIEWBOX.width;
     ctx.scale(scale, scale);
     ctx.fillStyle = '#FFFFFF';
     const p = new Path2D(LOGO_FILLED_PATH);
     ctx.fill(p, 'evenodd');
+    ctx.restore();
   }
 
   private uploadCanvasToTexture(canvas: HTMLCanvasElement) {

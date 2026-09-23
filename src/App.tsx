@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CentralLogo } from './components/CentralLogo';
 import { Header } from './components/Header';
+import { IntroSequence } from './components/IntroSequence';
 import { AppState, Language } from './types';
 import { ArtDeejayWebGL } from './webgl/ArtDeejayWebGL';
 
@@ -44,14 +45,14 @@ export default function App() {
     setIsWebGLReadyFrameDrawn(true);
   }, []);
 
-  // Stage state: 'intro' | 'theme-transition' | 'ready'
+  // Sequential States: preloading -> logoSequence -> video -> whiteCover -> ready
   const [appState, setAppState] = useState<AppState>(() => {
     if (typeof window !== 'undefined' && window.matchMedia) {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         return 'ready';
       }
     }
-    return 'intro';
+    return 'preloading';
   });
 
   // Key to force-remount intro component when replayed
@@ -78,12 +79,7 @@ export default function App() {
     }
   }, [language]);
 
-  // Transition from stroke drawing to theme transition (black -> white)
-  const handleThemeTransitionStart = useCallback(() => {
-    setAppState('theme-transition');
-  }, []);
-
-  // Transition from theme transition to full ready state
+  // Transition to full ready state
   const handleIntroComplete = useCallback(() => {
     setAppState('ready');
   }, []);
@@ -92,7 +88,7 @@ export default function App() {
   const replayIntro = useCallback(() => {
     document.body.style.backgroundColor = '#000000';
     setIsWebGLReadyFrameDrawn(false);
-    setAppState('intro');
+    setAppState('preloading');
     setIntroKey((k) => k + 1);
   }, []);
 
@@ -130,7 +126,7 @@ export default function App() {
 
   // Sync body background color
   useEffect(() => {
-    if (appState === 'ready' || appState === 'theme-transition') {
+    if (appState === 'ready') {
       document.body.style.backgroundColor = '#FFFFFF';
     } else {
       document.body.style.backgroundColor = '#000000';
@@ -140,8 +136,8 @@ export default function App() {
   return (
     <div
       id="portfolio-screen"
-      className={`relative w-full h-[100svh] min-h-[100svh] overflow-hidden select-none transition-colors duration-700 ease-in-out ${
-        appState === 'ready' || appState === 'theme-transition' ? 'bg-[#FFFFFF]' : 'bg-[#000000]'
+      className={`relative w-full h-[100dvh] min-h-[100dvh] overflow-hidden select-none transition-colors duration-700 ease-in-out ${
+        appState === 'ready' ? 'bg-[#FFFFFF]' : 'bg-[#000000]'
       }`}
     >
       {/* Layer 1: Minimalist Header (z-50) */}
@@ -159,16 +155,24 @@ export default function App() {
         onFirstReadyFrame={handleFirstReadyFrame}
       />
 
-      {/* Layer 3: Intro Calligraphy Reveal & Seamless DOM Fallback (z-30) */}
+      {/* Layer 3: Main Screen Central Logo DOM Fallback (z-30) */}
       <CentralLogo
-        key={introKey}
         appState={appState}
-        onThemeTransitionStart={handleThemeTransitionStart}
-        onIntroComplete={handleIntroComplete}
         prefersReducedMotion={prefersReducedMotion}
         isWebGLActive={isWebGLActive}
         isWebGLReadyFrameDrawn={isWebGLReadyFrameDrawn}
       />
+
+      {/* Layer 4: Sequential Intro (preloading -> logoSequence -> video -> whiteCover) (z-40) */}
+      {appState !== 'ready' && (
+        <IntroSequence
+          key={introKey}
+          appState={appState}
+          onStateChange={setAppState}
+          onIntroComplete={handleIntroComplete}
+          prefersReducedMotion={prefersReducedMotion}
+        />
+      )}
     </div>
   );
 }

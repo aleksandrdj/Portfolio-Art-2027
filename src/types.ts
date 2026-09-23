@@ -1,4 +1,4 @@
-export type AppState = 'intro' | 'theme-transition' | 'ready';
+export type AppState = 'preloading' | 'logoSequence' | 'video' | 'whiteCover' | 'ready';
 
 export type Language = 'ru' | 'en';
 

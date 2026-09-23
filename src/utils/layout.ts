@@ -23,22 +23,27 @@ export interface LogoLayout {
 
 /**
  * Computes exact logo placement according to specification:
- * - breakpoint: 768 CSS px
- * - mobile (<768px): 82% width
- * - desktop (>=768px): 50% width
- * - maximum width: 850 CSS px
- * - height strictly follows original viewBox 1920x787
+ * - width strictly 60vw (0.60 * containerWidthCss) on all screen sizes
+ * - extreme low viewport protection: if height exceeds 85% of viewport, scale down proportionally
+ * - height strictly follows original viewBox 1920x787 (aspect ratio ~2.4396)
  * - centered horizontally and vertically
+ * - DPR influences only physical pixel coordinates, not CSS visible layout
  */
 export function computeLogoLayout(
   containerWidthCss: number,
   containerHeightCss: number,
   dpr: number = 1
 ): LogoLayout {
-  const isMobile = containerWidthCss < 768;
-  const targetWidthCss = isMobile ? containerWidthCss * 0.82 : containerWidthCss * 0.50;
-  const widthCss = Math.min(850, Math.max(10, targetWidthCss));
-  const heightCss = widthCss / ORIGINAL_VIEWBOX.aspectRatio;
+  const targetWidthCss = containerWidthCss * 0.60;
+  let widthCss = targetWidthCss;
+  let heightCss = widthCss / ORIGINAL_VIEWBOX.aspectRatio;
+
+  // Preserve full silhouette vertically in extreme low viewport scenarios
+  const maxHeightCss = containerHeightCss * 0.85;
+  if (heightCss > maxHeightCss) {
+    heightCss = maxHeightCss;
+    widthCss = heightCss * ORIGINAL_VIEWBOX.aspectRatio;
+  }
 
   const leftCss = (containerWidthCss - widthCss) / 2;
   const topCss = (containerHeightCss - heightCss) / 2;

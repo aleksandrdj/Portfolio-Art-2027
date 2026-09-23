@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "predev": "node scripts/extractLogo.mjs",
-    "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev": "vite",
     "prebuild": "node scripts/extractLogo.mjs",
     "build": "vite build",
     "preview": "vite preview",

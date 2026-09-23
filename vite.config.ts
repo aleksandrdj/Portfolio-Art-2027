@@ -13,7 +13,7 @@ function syncLogoDataPlugin() {
     name: 'sync-logo-data',
     buildStart() {
       try {
-        const svgPath = path.resolve(__dirname, 'public/Logo_ArtDeejay.svg');
+        const svgPath = path.resolve(__dirname, 'public/logo/Logo_ArtDeejay.svg');
         const scriptPath = path.resolve(__dirname, 'scripts/extractLogo.mjs');
         if (fs.existsSync(svgPath) && fs.existsSync(scriptPath)) {
           import('./scripts/extractLogo.mjs');
@@ -34,6 +34,9 @@ export default defineConfig(() => {
       },
     },
     server: {
+      port: 3000,
+      host: '0.0.0.0',
+      strictPort: true,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

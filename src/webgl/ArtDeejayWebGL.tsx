@@ -148,6 +148,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     // Pointer event handlers (passive, does not block scrolling)
     const handlePointerMove = (e: PointerEvent) => {
       if (appStateRef.current !== 'ready') return;
+      if (!isInteractionActive) return;
       idleController?.onPointerMove(e.clientX, e.clientY, width, height);
 
       if (e.pointerType === 'mouse' && !isTouchRef.current && !prefersReducedMotionRef.current) {
@@ -159,6 +160,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
 
     const handlePointerDown = (e: PointerEvent) => {
       if (appStateRef.current !== 'ready') return;
+      if (!isInteractionActive) return;
       idleController?.onPointerDown(e.clientX, e.clientY, width, height);
     };
 
@@ -192,8 +194,11 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     const MAX_CATCHUP = 3;
     let animId: number;
 
-    // Smooth fade-in for background contour lines when entering ready state
+    // Smooth fade-in for background contour lines (700ms) and main logo (900ms ease-out)
     let bgOpacity = 0.0;
+    let logoOpacity = 0.0;
+    let readyStartTime: number | null = null;
+    let isInteractionActive = false;
     let readyFrameDispatched = false;
     let prevAppState: AppState = appStateRef.current;
 
@@ -212,16 +217,66 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       const currentAppState = appStateRef.current;
       const currentReducedMotion = prefersReducedMotionRef.current;
 
-      // Detect transition to ready state to start timers from state 'ready'
+      // Handle transitions between states
       if (prevAppState !== currentAppState) {
         if (currentAppState === 'ready') {
-          idleController?.onStateReady(now);
+          readyStartTime = now;
+          if (currentReducedMotion) {
+            bgOpacity = 1.0;
+            logoOpacity = 1.0;
+            isInteractionActive = true;
+            idleController?.onStateReady(now);
+          } else {
+            bgOpacity = 0.0;
+            logoOpacity = 0.0;
+            isInteractionActive = false;
+          }
+        } else {
+          readyStartTime = null;
+          isInteractionActive = false;
+          bgOpacity = 0.0;
+          logoOpacity = 0.0;
+          readyFrameDispatched = false;
         }
         prevAppState = currentAppState;
       }
 
-      // Parallax lerp
-      if (!isTouchRef.current && !currentReducedMotion && currentAppState === 'ready') {
+      // Main ready state coordination
+      if (currentAppState === 'ready') {
+        if (readyStartTime === null) {
+          readyStartTime = now;
+        }
+
+        if (currentReducedMotion) {
+          bgOpacity = 1.0;
+          logoOpacity = 1.0;
+          isInteractionActive = true;
+        } else {
+          const elapsed = (now - readyStartTime) / 1000;
+
+          // 1. Background contour lines: 700ms fade-in
+          bgOpacity = Math.min(1.0, elapsed / 0.7);
+
+          // 2. Main Logo: opacity 0 -> 1 over 900ms with cubic ease-out
+          const p = Math.min(Math.max(elapsed / 0.9, 0), 1.0);
+          logoOpacity = 1.0 - Math.pow(1.0 - p, 3.0); // Cubic ease-out
+
+          // 3. Activate parallax and fluid simulation strictly after logo appearance finishes (at 900ms)
+          if (elapsed >= 0.9 && !isInteractionActive) {
+            isInteractionActive = true;
+            idleController?.onStateReady(now);
+          }
+        }
+      } else {
+        readyStartTime = null;
+        isInteractionActive = false;
+        bgOpacity = 0.0;
+        logoOpacity = 0.0;
+        readyFrameDispatched = false;
+      }
+
+      // Parallax lerp (Active strictly after logo appearance is complete)
+      if (!isTouchRef.current && !currentReducedMotion && currentAppState === 'ready' && isInteractionActive) {
         const target = mouseTargetRef.current;
         const current = mouseCurrentRef.current;
         current.x += (target.x - current.x) * 0.06;
@@ -230,20 +285,8 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
         mouseCurrentRef.current = { x: 0, y: 0 };
       }
 
-      // Background lines fade-in coordination with Header
-      if (currentAppState === 'ready') {
-        if (currentReducedMotion) {
-          bgOpacity = 1.0;
-        } else if (bgOpacity < 1.0) {
-          bgOpacity = Math.min(1.0, bgOpacity + dt / 0.7); // 700ms fade-in
-        }
-      } else {
-        bgOpacity = 0.0;
-        readyFrameDispatched = false;
-      }
-
-      // Physics Simulation (active only in ready state)
-      if (currentAppState === 'ready' && !currentReducedMotion && fluidSim && fluidSim.isSupported && idleController) {
+      // Physics Simulation (active only in ready state after logo appearance is complete)
+      if (currentAppState === 'ready' && !currentReducedMotion && isInteractionActive && fluidSim && fluidSim.isSupported && idleController) {
         accumulatedSimTime += dt;
         let steps = 0;
 
@@ -306,7 +349,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
           dpr,
           parallaxCSS,
           rotationAngles,
-          1.0, // Logo is 100% visible continuously
+          logoOpacity,
           [17 / 255, 17 / 255, 17 / 255]
         );
 
