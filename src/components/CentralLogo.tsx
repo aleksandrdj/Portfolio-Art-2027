@@ -30,7 +30,7 @@ export const CentralLogo: React.FC<Props> = ({ appState, prefersReducedMotion, s
     let last = start;
     const update = (now: number) => {
       const p = Math.min(1, Math.max(0, scrollProgressRef?.current ?? 0));
-      const fade = prefersReducedMotion ? 1 : 1 - Math.pow(1 - Math.min(1, (now - start) / 900), 3);
+      const fade = prefersReducedMotion ? 1 : 1 - Math.pow(1 - Math.min(1, (now - start) / 1400), 3);
       const follow = 1 - Math.exp(-Math.min(now - last, 50) / 100);
       last = now;
       current.x += (target.x - current.x) * follow;
