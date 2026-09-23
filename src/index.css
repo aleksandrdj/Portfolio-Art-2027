@@ -1,14 +1,28 @@
 @import "tailwindcss";
 
-@layer base {
-  html, body, #root {
-    width: 100%;
-    height: 100svh;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background-color: #000000;
-  }
+html {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 100%;
+  min-height: 100svh;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+  height: auto;
+}
+
+html.intro-running,
+html.intro-running body {
+  overflow: hidden;
 }
 
 .transition-bg {

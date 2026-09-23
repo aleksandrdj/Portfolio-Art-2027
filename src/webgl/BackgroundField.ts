@@ -16,11 +16,8 @@ precision highp float;
 
 in vec2 v_uv;
 
-uniform sampler2D u_fluidMask;
 uniform vec2 u_resolution;
 uniform float u_time;
-uniform vec2 u_mouseNDC;
-uniform float u_mousePace;
 uniform float u_opacity;
 uniform float u_dpr;
 uniform float u_scrollProgress;
@@ -36,14 +33,13 @@ void main() {
   // 1. Normalized coordinates
   vec2 p = vec2(uv.x * aspect, uv.y);
 
-  // Constants: reduced speed for slow, elegant, meditative drift
+  // Constants: slow, elegant, meditative drift
   const float SCALE = 1.0;
   const float SPEED = 0.02;
   const float DISTORT_SCALE = 0.8;
   const float DISTORT_INTENSITY = 0.35;
   const float NOISE_DETAIL = 3.0;
 
-  // Background must NOT jerk or twitch from cursor movement.
   // Slow autonomous organic distortion field:
   float warp = 0.5 + 0.5 * snoise(vec3(p * DISTORT_SCALE, u_time * SPEED * 0.25));
 
@@ -51,10 +47,8 @@ void main() {
   vec2 shifted = p + vec2(warp * DISTORT_INTENSITY);
   float noiseValue = 0.5 + 0.5 * snoise(vec3(shifted * SCALE, u_time * SPEED));
 
-  // Repeating levels & region
+  // Repeating levels
   float fVal = noiseValue * NOISE_DETAIL;
-  float phase = fract(fVal);
-  float region = step(0.5, phase);
 
   // Resolution-stable anti-aliased contour extraction
   float twoF = 2.0 * fVal;
@@ -62,9 +56,9 @@ void main() {
   float dF = max(fwidth(twoF), 0.0001);
   float pxDist = distToBoundary / dF;
 
-  // Target thickness: ~0.85 CSS px (scaled by DPR)
-  float targetPxWidth = 0.85 * max(u_dpr, 1.0);
-  float lineAlpha = 1.0 - smoothstep(targetPxWidth * 0.4, targetPxWidth * 0.9, pxDist);
+  // Target thickness: ~0.7 CSS px (scaled by DPR)
+  float targetPxWidth = 0.7 * max(u_dpr, 1.0);
+  float lineAlpha = 1.0 - smoothstep(targetPxWidth * 0.4, targetPxWidth * 0.85, pxDist);
 
   // Living gradient palette (from specification):
   // Bright cyan-blue: #008CB2 -> vec3(0.0, 140.0 / 255.0, 178.0 / 255.0)
@@ -94,32 +88,19 @@ void main() {
   vec3 baseBg = mix(vec3(1.0, 1.0, 1.0), livingGradient, u_scrollProgress);
 
   // Topographic lines:
-  // On white: #E3E4E2
-  // On rich gradient: delicate light cyan #8CE8F2
-  vec3 lineWhiteBg = vec3(227.0 / 255.0, 228.0 / 255.0, 226.0 / 255.0);
-  vec3 lineGradientBg = vec3(140.0 / 255.0, 225.0 / 255.0, 240.0 / 255.0);
+  // On white: delicate warm gray #E4E6E3
+  // On rich gradient: delicate shade slightly lighter than background (mix with cyan), no glow!
+  vec3 lineWhiteBg = vec3(228.0 / 255.0, 230.0 / 255.0, 227.0 / 255.0);
+  vec3 lineGradientBg = mix(livingGradient, colBright, 0.22);
   vec3 lineColor = mix(lineWhiteBg, lineGradientBg, u_scrollProgress);
 
-  float currentLineAlpha = lineAlpha * u_opacity * mix(0.85, 0.55, u_scrollProgress);
+  // Target opacity for contours on saturated gradient: strictly 0.08 (range 0.06 - 0.10)
+  float lineOpacity = mix(0.18, 0.08, u_scrollProgress) * u_opacity;
+  float currentLineAlpha = lineAlpha * lineOpacity;
+
   vec3 backgroundWithContours = mix(baseBg, lineColor, currentLineAlpha);
 
-  // Unified fluid mask in exact screen coordinates
-  vec2 screenUV = gl_FragCoord.xy / u_resolution;
-  float mask = texture(u_fluidMask, screenUV).r;
-
-  // Fluid trail color slightly darker than white background on light, or soft glow on dark
-  vec3 trailLightWhite = vec3(238.0 / 255.0, 238.0 / 255.0, 235.0 / 255.0);
-  vec3 trailDarkWhite  = vec3(221.0 / 255.0, 223.0 / 255.0, 217.0 / 255.0);
-  vec3 trailLightGrad  = mix(colDeep, colBright, 0.35);
-  vec3 trailDarkGrad   = mix(colDark, colDeep, 0.5);
-
-  vec3 trailLight = mix(trailLightWhite, trailLightGrad, u_scrollProgress);
-  vec3 trailDark  = mix(trailDarkWhite, trailDarkGrad, u_scrollProgress);
-  vec3 trailColor = mix(trailLight, trailDark, region);
-
-  vec3 finalColor = mix(backgroundWithContours, trailColor, mask * u_opacity);
-
-  fragColor = vec4(finalColor, 1.0);
+  fragColor = vec4(backgroundWithContours, 1.0);
 }
 `;
 
@@ -129,11 +110,8 @@ export class BackgroundField {
   private quadBuffer: WebGLBuffer;
   private program: WebGLProgram;
 
-  private locFluidMask: WebGLUniformLocation | null = null;
   private locResolution: WebGLUniformLocation | null = null;
   private locTime: WebGLUniformLocation | null = null;
-  private locMouseNDC: WebGLUniformLocation | null = null;
-  private locMousePace: WebGLUniformLocation | null = null;
   private locOpacity: WebGLUniformLocation | null = null;
   private locDpr: WebGLUniformLocation | null = null;
   private locScrollProgress: WebGLUniformLocation | null = null;
@@ -145,23 +123,17 @@ export class BackgroundField {
     this.quadBuffer = quad.buffer;
 
     this.program = createProgram(gl, VS_COMPOSITE, FS_BACKGROUND_COMPOSITE);
-    this.locFluidMask = gl.getUniformLocation(this.program, 'u_fluidMask');
     this.locResolution = gl.getUniformLocation(this.program, 'u_resolution');
     this.locTime = gl.getUniformLocation(this.program, 'u_time');
-    this.locMouseNDC = gl.getUniformLocation(this.program, 'u_mouseNDC');
-    this.locMousePace = gl.getUniformLocation(this.program, 'u_mousePace');
     this.locOpacity = gl.getUniformLocation(this.program, 'u_opacity');
     this.locDpr = gl.getUniformLocation(this.program, 'u_dpr');
     this.locScrollProgress = gl.getUniformLocation(this.program, 'u_scrollProgress');
   }
 
   public render(
-    fluidMaskTex: WebGLTexture | null,
     width: number,
     height: number,
     time: number,
-    mouseNDC: [number, number],
-    mousePace: number,
     opacity: number,
     dpr: number,
     scrollProgress: number = 0.0
@@ -171,14 +143,8 @@ export class BackgroundField {
     gl.useProgram(this.program);
     gl.bindVertexArray(this.quadVAO);
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, fluidMaskTex);
-    gl.uniform1i(this.locFluidMask, 0);
-
     gl.uniform2f(this.locResolution, width, height);
     gl.uniform1f(this.locTime, time);
-    gl.uniform2f(this.locMouseNDC, mouseNDC[0], mouseNDC[1]);
-    gl.uniform1f(this.locMousePace, mousePace);
     gl.uniform1f(this.locOpacity, opacity);
     gl.uniform1f(this.locDpr, dpr);
     gl.uniform1f(this.locScrollProgress, scrollProgress);
@@ -186,7 +152,6 @@ export class BackgroundField {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     gl.bindVertexArray(null);
-    gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
   public dispose() {

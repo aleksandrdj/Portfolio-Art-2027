@@ -153,7 +153,7 @@ export const CentralLogo: React.FC<CentralLogoProps> = ({
     <div
       ref={containerRef}
       id="central-logo-container"
-      className="fixed inset-0 flex items-center justify-center pointer-events-none z-30 select-none overflow-hidden"
+      className="absolute inset-0 flex items-center justify-center pointer-events-none z-30 select-none overflow-hidden"
     >
       {/* Centered with exactly 60vw width, matching viewBox aspect ratio 1920 / 787 */}
       <div

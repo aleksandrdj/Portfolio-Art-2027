@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { AutografOverlay } from './components/AutografOverlay';
-import { CentralLogo } from './components/CentralLogo';
+import { CentralStage } from './components/CentralStage';
 import { Header } from './components/Header';
 import { IntroSequence } from './components/IntroSequence';
-import { SiluetDOM } from './components/SiluetDOM';
+import { SiluetLayer } from './components/SiluetLayer';
 import { AppState, Language } from './types';
 import { ArtDeejayWebGL } from './webgl/ArtDeejayWebGL';
 
@@ -92,15 +92,13 @@ export default function App() {
 
   // Unified scroll progress reference (0.0 to 1.0)
   // Shared directly across WebGL uniforms, Autograf mask, and Header without React re-renders
-  const scrollProgressRef = useRef<number>(prefersReducedMotion ? 1.0 : 0.0);
+  const scrollProgressRef = useRef<number>(0.0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Replay function accessible globally, via 'R' key, and via URL param ?intro=1
   const replayIntro = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     scrollProgressRef.current = 0.0;
-    document.body.style.backgroundColor = '#000000';
-    document.body.style.overflow = 'hidden';
     setIsWebGLReadyFrameDrawn(false);
     setAppState('preloading');
     setIntroKey((k) => k + 1);
@@ -138,33 +136,27 @@ export default function App() {
     };
   }, [replayIntro]);
 
-  // Sync body background color and scrolling behavior
+  // Single source of truth for scroll locking: html.intro-running
   useEffect(() => {
-    if (appState === 'ready') {
-      document.body.style.backgroundColor = '#FFFFFF';
-      if (prefersReducedMotion) {
-        document.body.style.overflow = 'hidden';
-        scrollProgressRef.current = 1.0;
-      } else {
-        document.body.style.overflowY = 'auto';
-        document.body.style.overflowX = 'hidden';
-      }
-    } else {
+    const isIntroActive = appState !== 'ready' && !prefersReducedMotion;
+    if (isIntroActive) {
+      document.documentElement.classList.add('intro-running');
       document.body.style.backgroundColor = '#000000';
-      document.body.style.overflow = 'hidden';
-      scrollProgressRef.current = 0.0;
+    } else {
+      document.documentElement.classList.remove('intro-running');
+      document.body.style.backgroundColor = '#FFFFFF';
     }
+
+    return () => {
+      document.documentElement.classList.remove('intro-running');
+    };
   }, [appState, prefersReducedMotion]);
 
-  // GSAP ScrollTrigger configuration for natural vertical scrolling
+  // GSAP ScrollTrigger configuration with scrubbed tween for smooth scrollProgress
   useEffect(() => {
-    if (appState !== 'ready' || prefersReducedMotion) {
+    if (appState !== 'ready') {
       return;
     }
-
-    // Ensure scroll starts from top upon entering ready state
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    scrollProgressRef.current = 0.0;
 
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -172,22 +164,32 @@ export default function App() {
     // Mobile address bar height adjustments should not disrupt scroll progress
     ScrollTrigger.config({ ignoreMobileResize: true });
 
-    const trigger = ScrollTrigger.create({
-      trigger: container,
-      start: 'top top',
-      end: 'bottom bottom',
-      scrub: 0.35, // Smooth 0.35s scrub as specified
-      onUpdate: (self) => {
-        scrollProgressRef.current = self.progress;
+    const progressState = { value: 0 };
+    const tween = gsap.to(progressState, {
+      value: 1,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: container,
+        start: 'top top',
+        end: 'bottom bottom',
+        scrub: 0.35,
+      },
+      onUpdate: () => {
+        scrollProgressRef.current = progressState.value;
       },
     });
 
-    ScrollTrigger.refresh();
+    // Refresh dimensions on next animation frame once 240svh section is in DOM
+    const rAfId = requestAnimationFrame(() => {
+      ScrollTrigger.refresh();
+    });
 
     return () => {
-      trigger.kill();
+      cancelAnimationFrame(rAfId);
+      tween.scrollTrigger?.kill();
+      tween.kill();
     };
-  }, [appState, prefersReducedMotion]);
+  }, [appState]);
 
   const isReady = appState === 'ready';
 
@@ -196,32 +198,16 @@ export default function App() {
       ref={scrollContainerRef}
       id="portfolio-screen"
       className={`relative w-full select-none transition-colors duration-700 ease-in-out ${
-        isReady && !prefersReducedMotion
-          ? 'h-[240svh]'
-          : 'h-[100svh] overflow-hidden'
+        isReady ? 'h-[240svh]' : 'h-[100svh]'
       } ${isReady ? 'bg-[#FFFFFF]' : 'bg-[#000000]'}`}
     >
       {/* Sticky scene container (100svh viewport pinned during transition distance) */}
       <div
         className={`w-full h-[100svh] overflow-hidden ${
-          isReady && !prefersReducedMotion ? 'sticky top-0 left-0' : 'relative'
+          isReady ? 'sticky top-0 left-0' : 'relative'
         }`}
       >
-        {/* Layer 7: Minimalist Header (z-50) */}
-        <Header
-          isVisible={isReady}
-          language={language}
-          onLanguageChange={setLanguage}
-          scrollProgressRef={scrollProgressRef}
-        />
-
-        {/* WebGL Canvas:
-            Layer 1 (White base),
-            Layer 2 (Living gradient 0->1),
-            Layer 3 (Topographic lines),
-            Layer 4 (Siluet 0->0.10),
-            Layer 5 (Central Logo 60vw -> 34vw/48vw, #111111 -> #FFFFFF)
-        */}
+        {/* Layer 1 & 2: WebGL Canvas (White base + living gradient + quiet contours) (z-0) */}
         <ArtDeejayWebGL
           appState={appState}
           prefersReducedMotion={prefersReducedMotion}
@@ -230,26 +216,30 @@ export default function App() {
           onFirstReadyFrame={handleFirstReadyFrame}
         />
 
-        {/* DOM Fallbacks if WebGL is unavailable */}
-        {!isWebGLActive && (
-          <SiluetDOM
-            appState={appState}
-            scrollProgressRef={scrollProgressRef}
-          />
-        )}
-
-        {/* Layer 5 Fallback: Central Logo DOM Fallback (z-30) */}
-        <CentralLogo
+        {/* Layer 3: Dark fullscreen siluet (max 10% opacity, cover scaling) (z-10) */}
+        <SiluetLayer
           appState={appState}
-          prefersReducedMotion={prefersReducedMotion}
-          isWebGLActive={isWebGLActive}
-          isWebGLReadyFrameDrawn={isWebGLReadyFrameDrawn}
           scrollProgressRef={scrollProgressRef}
         />
 
-        {/* Layer 6: Progressive Autograf Signature Overlay (z-20) */}
+        {/* Layer 4 & 5: Central rectangular stage with logo and darkening overlay (z-20) */}
+        <CentralStage
+          appState={appState}
+          prefersReducedMotion={prefersReducedMotion}
+          scrollProgressRef={scrollProgressRef}
+        />
+
+        {/* Layer 6: Progressive Autograf Signature Overlay (z-30) */}
         <AutografOverlay
           appState={appState}
+          scrollProgressRef={scrollProgressRef}
+        />
+
+        {/* Layer 7: Minimalist Header (z-50) */}
+        <Header
+          isVisible={isReady}
+          language={language}
+          onLanguageChange={setLanguage}
           scrollProgressRef={scrollProgressRef}
         />
 
