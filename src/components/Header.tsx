@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
             id="brand-author-name"
             className="text-[14px] md:text-[16px] font-medium text-neutral-900 tracking-tight font-sans select-none transition-colors"
           >
-            Alexsandr Savenkov
+            {language === 'ru' ? 'Александр Савенков' : 'Alexsandr Savenkov'}
           </span>
         </div>
 

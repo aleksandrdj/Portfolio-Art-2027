@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { AutografOverlay } from './components/AutografOverlay';
+import { AboutSection } from './components/AboutSection';
 import { CentralLogo } from './components/CentralLogo';
 import { Header } from './components/Header';
 import { IntroSequence } from './components/IntroSequence';
@@ -92,12 +93,14 @@ export default function App() {
   // Unified scroll progress reference (0.0 to 1.0)
   // Shared directly across WebGL uniforms, Autograf mask, and Header without React re-renders
   const scrollProgressRef = useRef<number>(0.0);
+  const aboutProgressRef = useRef<number>(0.0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Replay function accessible globally, via 'R' key, and via URL param ?intro=1
   const replayIntro = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     scrollProgressRef.current = 0.0;
+    aboutProgressRef.current = 0.0;
     setIsWebGLReadyFrameDrawn(false);
     setAppState('preloading');
     setIntroKey((k) => k + 1);
@@ -174,11 +177,12 @@ export default function App() {
         scrub: 0.35,
       },
       onUpdate: () => {
-        scrollProgressRef.current = progressState.value;
+        scrollProgressRef.current = Math.min(1, progressState.value / 0.5);
+        aboutProgressRef.current = Math.min(1, Math.max(0, (progressState.value - 0.42) / 0.58));
       },
     });
 
-    // Refresh dimensions on next animation frame once 240svh section is in DOM
+    // Refresh dimensions after the complete intro and about scroll scene is in the DOM.
     const rAfId = requestAnimationFrame(() => {
       ScrollTrigger.refresh();
     });
@@ -197,7 +201,7 @@ export default function App() {
       ref={scrollContainerRef}
       id="portfolio-screen"
       className={`relative w-full select-none transition-colors duration-700 ease-in-out ${
-        isReady ? 'h-[240svh]' : 'h-[100svh]'
+        isReady ? 'h-[500svh]' : 'h-[100svh]'
       } ${isReady ? 'bg-[#FFFFFF]' : 'bg-[#000000]'}`}
     >
       {/* Sticky scene container (100svh viewport pinned during transition distance) */}
@@ -233,12 +237,21 @@ export default function App() {
           appState={appState}
           prefersReducedMotion={prefersReducedMotion}
           scrollProgressRef={scrollProgressRef}
+          exitProgressRef={aboutProgressRef}
         />
 
         {/* Layer 5: Progressive Autograf Signature Overlay (Pure white over Logo, z-30) */}
         <AutografOverlay
           appState={appState}
           scrollProgressRef={scrollProgressRef}
+          exitProgressRef={aboutProgressRef}
+        />
+
+        <AboutSection
+          appState={appState}
+          language={language}
+          progressRef={aboutProgressRef}
+          prefersReducedMotion={prefersReducedMotion}
         />
 
         {/* Sequential Intro (preloading -> logoSequence -> video -> whiteCover) (z-40) */}

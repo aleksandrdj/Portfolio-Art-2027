@@ -36,6 +36,8 @@ export class IdleController {
   private autoCurrentNDC: [number, number] | null = null;
   private autoPreviousNDC: [number, number] | null = null;
 
+  private mobilePasses: { curve: BezierCurve; start: number; duration: number; previous: [number, number] | null }[] = [];
+
   // Schedule timing
   private nextPassTime = Infinity;
   private curveIndex = 0;
@@ -49,8 +51,7 @@ export class IdleController {
       const coarseQuery = window.matchMedia?.('(pointer: coarse)');
       this.isCoarsePointer = !!(
         coarseQuery?.matches ||
-        'ontouchstart' in window ||
-        navigator.maxTouchPoints > 0
+        (navigator.maxTouchPoints > 0 && !window.matchMedia?.('(hover: hover) and (pointer: fine)').matches)
       );
     }
   }
@@ -62,8 +63,9 @@ export class IdleController {
     this.isReady = true;
     this.lastRealActivityTime = now;
     if (this.isCoarsePointer) {
-      // Mobile: First autonomous pass in 1-2 seconds after intro finishes
-      this.nextPassTime = now + 1000 + Math.random() * 1000;
+      // Mobile: start soon after the scene becomes interactive.
+      this.mobilePasses = [];
+      this.nextPassTime = now + 400 + Math.random() * 400;
     } else {
       // Desktop: 4 seconds without mouse movement
       this.nextPassTime = now + 4000;
@@ -80,6 +82,7 @@ export class IdleController {
 
     if (moveDist > 0.5) {
       this.lastRealActivityTime = now;
+      if (this.isCoarsePointer) { this.mobilePasses = []; this.scheduleNextAutonomousPass(now); }
 
       // Stop autonomous injection immediately on user interaction
       // Existing fluid simulation is NOT cleared, allowing natural physical dissipation!
@@ -114,6 +117,7 @@ export class IdleController {
   }
 
   public onPointerDown(clientX: number, clientY: number, width: number, height: number) {
+    this.onMouseLeave();
     this.onPointerMove(clientX, clientY, width, height);
     if (this.isAutonomousActive) {
       this.isAutonomousActive = false;
@@ -127,6 +131,7 @@ export class IdleController {
   public onScrollOrTouch() {
     const now = performance.now();
     this.lastRealActivityTime = now;
+    if (this.isCoarsePointer) { this.mobilePasses = []; this.scheduleNextAutonomousPass(now); }
     if (this.isAutonomousActive) {
       this.isAutonomousActive = false;
       this.currentCurve = null;
@@ -147,6 +152,7 @@ export class IdleController {
 
   public onTabVisibilityChange(hidden: boolean) {
     const now = performance.now();
+    this.mobilePasses = [];
     if (!hidden) {
       // Waking up: reset timers without jump
       this.lastRealActivityTime = now;
@@ -164,8 +170,8 @@ export class IdleController {
 
   private scheduleNextAutonomousPass(now: number) {
     if (this.isCoarsePointer) {
-      // Subsequent intervals: 3-6 seconds
-      this.nextPassTime = now + 3000 + Math.random() * 3000;
+      // Overlapping mobile trails, without additional fluid simulations.
+      this.nextPassTime = now + 900 + Math.random() * 700;
     } else {
       // Desktop intervals: 4-8 seconds
       this.nextPassTime = now + 4000 + Math.random() * 4000;
@@ -237,6 +243,41 @@ export class IdleController {
     }
   }
 
+  private consumeMobilePasses(now: number, force: number, radius: number, width: number, height: number): SplatPoint[] {
+    this.mobilePasses = this.mobilePasses.filter(pass => now < pass.start + pass.duration);
+    if (now >= this.nextPassTime) {
+      const count = Math.min(3 - this.mobilePasses.length, Math.random() < 0.65 ? 2 : 1);
+      for (let i = 0; i < count; i++) {
+        const curve = this.generateNewCurve();
+        // Vary each trajectory rather than stacking all trails on the same line.
+        const offset = (Math.random() - 0.5) * 0.55;
+        for (const point of [curve.p0, curve.p1, curve.p2, curve.p3]) point[1] += offset;
+        this.mobilePasses.push({ curve, start: now + i * 180, duration: 2200 + Math.random() * 1000, previous: null });
+      }
+      this.scheduleNextAutonomousPass(now);
+    }
+    const splats: SplatPoint[] = [];
+    for (const pass of this.mobilePasses) {
+      if (now < pass.start) continue;
+      const p = Math.min(1, (now - pass.start) / pass.duration);
+      const current = this.getCubicBezier(p * p * (3 - 2 * p), pass.curve);
+      const previous = pass.previous;
+      pass.previous = current;
+      if (!previous) continue;
+      const dx = (current[0] - previous[0]) * 0.5;
+      const dy = (current[1] - previous[1]) * 0.5;
+      const steps = Math.max(1, Math.min(8, Math.ceil(Math.hypot(dx * width, dy * height) / Math.max(4, radius * 0.45))));
+      for (let i = 1; i <= steps; i++) {
+        splats.push({
+          cursorUV: [previous[0] * 0.5 + 0.5 + dx * i / steps, previous[1] * 0.5 + 0.5 + dy * i / steps],
+          force: [dx * force * 1.4 / steps, dy * force * 1.4 / steps],
+          density: 0.38 / steps,
+        });
+      }
+    }
+    return splats;
+  }
+
   /**
    * Consumes input for physics simulation step.
    * Interpolates sub-points between last and current position with step <= radiusPx * 0.5.
@@ -306,6 +347,8 @@ export class IdleController {
       }
       return [];
     }
+
+    if (this.isCoarsePointer) return this.consumeMobilePasses(now, mouseForce, radiusPx, cssWidth, cssHeight);
 
     // 2. Autonomous Idle Pass (Desktop >= 4s idle; Mobile autonomous runs)
     if (!this.isAutonomousActive) {

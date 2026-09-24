@@ -351,7 +351,7 @@ export class FluidSimulation {
     // Set simulation resolution so grid cells provide smooth round brush splats
     // Target min dimension ~280-360 cells so a ~20px radius occupies ~8-12 cells
     const minDim = Math.max(1, Math.min(viewportWidthCss, viewportHeightCss));
-    const scale = Math.min(Math.max(300 / minDim, 0.22), 0.5);
+    const scale = Math.min(320 / minDim, 1.0);
 
     const W = Math.max(64, Math.round(viewportWidthCss * scale));
     const H = Math.max(64, Math.round(viewportHeightCss * scale));

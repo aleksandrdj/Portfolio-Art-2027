@@ -4,7 +4,6 @@ import { BackgroundField } from './BackgroundField';
 import { FluidMaskPass } from './FluidMaskPass';
 import { FluidSimulation } from './FluidSimulation';
 import { IdleController } from './IdleController';
-import { LogoPass } from './LogoPass';
 import { createZeroTexture } from './webglUtils';
 
 interface ArtDeejayWebGLProps {
@@ -82,7 +81,6 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     let fluidSim: FluidSimulation | null = null;
     let fluidMaskPass: FluidMaskPass | null = null;
     let bgField: BackgroundField | null = null;
-    let logoPass: LogoPass | null = null;
     let idleController: IdleController | null = null;
     let zeroTex: WebGLTexture | null = null;
 
@@ -90,7 +88,6 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       fluidSim = new FluidSimulation(gl, width, height);
       fluidMaskPass = new FluidMaskPass(gl, canvas.width, canvas.height);
       bgField = new BackgroundField(gl);
-      logoPass = new LogoPass(gl);
       idleController = new IdleController();
       zeroTex = createZeroTexture(gl);
       onWebGLReadyRef.current?.(true);
@@ -103,6 +100,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     // Context loss / restoration handling
     const handleContextLost = (e: Event) => {
       e.preventDefault();
+      onWebGLReadyRef.current?.(false);
       cleanupEngine();
     };
 
@@ -111,9 +109,9 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
         fluidSim = new FluidSimulation(gl, width, height);
         fluidMaskPass = new FluidMaskPass(gl, canvas.width, canvas.height);
         bgField = new BackgroundField(gl);
-        logoPass = new LogoPass(gl);
         idleController = new IdleController();
         zeroTex = createZeroTexture(gl);
+        onWebGLReadyRef.current?.(true);
       } catch (err) {
         console.error('Failed to reinitialize after context restore:', err);
       }
@@ -123,12 +121,10 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       fluidSim?.dispose();
       fluidMaskPass?.dispose();
       bgField?.dispose();
-      logoPass?.dispose();
       if (zeroTex) gl.deleteTexture(zeroTex);
       fluidSim = null;
       fluidMaskPass = null;
       bgField = null;
-      logoPass = null;
       zeroTex = null;
       idleController = null;
     };
@@ -181,6 +177,9 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     window.addEventListener('pointerdown', handlePointerDown, { passive: true });
     window.addEventListener('pointerleave', handlePointerLeave);
+    window.addEventListener('pointercancel', handlePointerLeave);
+    const handlePointerUp = (e: PointerEvent) => { if (e.pointerType !== 'mouse') handlePointerLeave(); };
+    window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('scroll', handleScrollOrTouch, { passive: true });
     window.addEventListener('touchmove', handleScrollOrTouch, { passive: true });
 
@@ -312,8 +311,7 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       }
 
       // Render Passes
-      if (currentAppState === 'ready' && bgField && logoPass && fluidMaskPass && idleController) {
-        const snapshot = idleController.getRenderSnapshot(now);
+      if (currentAppState === 'ready' && bgField && fluidMaskPass && idleController) {
         // Sample scalar density field (isotropic and symmetric in all directions)
         const densityTex = (fluidSim && fluidSim.isSupported)
           ? fluidSim.getDensityTexture()
@@ -331,15 +329,13 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
           canvas.width,
           canvas.height,
           simTime,
-          snapshot.mouseNDC,
-          snapshot.mousePace,
           bgOpacity,
           dpr,
           scrollProgress
         );
 
         // WebGL canvas renders Layer 1 (White base), Layer 2 (Living gradient), Layer 3 (Topographic field), and interactive fluid
-        // Layer 4 (Central Logo with vector line-draw in pure black) and Layer 5 (Autograph in white) are handled cleanly in DOM for supreme vector fidelity
+        // Original logo and scroll-revealed autograph remain sharp SVG layers in the DOM.
 
         // Notify parent that WebGL first frame is drawn
         if (!readyFrameDispatched) {
@@ -359,6 +355,8 @@ export const ArtDeejayWebGL: React.FC<ArtDeejayWebGLProps> = ({
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointerleave', handlePointerLeave);
+      window.removeEventListener('pointercancel', handlePointerLeave);
+      window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('scroll', handleScrollOrTouch);
       window.removeEventListener('touchmove', handleScrollOrTouch);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
