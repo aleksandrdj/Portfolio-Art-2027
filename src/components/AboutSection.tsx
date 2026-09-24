@@ -12,6 +12,7 @@ interface VisualBlock {
   id: string;
   className: string;
   start: number;
+  duration: number;
   drift: number;
   kind: 'photo' | 'experience';
   label: { ru: string; en: string };
@@ -25,8 +26,9 @@ const blocks: VisualBlock[] = [
   {
     id: 'a2b',
     kind: 'experience',
-    className: 'left-[18%] -top-[3%] w-[18vw] min-w-[210px] max-w-[330px] aspect-[3/2] max-md:left-[4%] max-md:top-[4%] max-md:w-[44vw] max-md:min-w-0',
-    start: 0.03,
+    className: 'left-[38%] -top-[3%] w-[18vw] min-w-[210px] max-w-[330px] aspect-[3/2] max-md:left-[27%] max-md:top-[4%] max-md:w-[44vw] max-md:min-w-0',
+    start: 0.00,
+    duration: 0.38,
     drift: -22,
     label: { ru: 'Опыт работы', en: 'Experience' },
     company: 'A2b Creative Agency',
@@ -37,8 +39,9 @@ const blocks: VisualBlock[] = [
   {
     id: 'work',
     kind: 'photo',
-    className: 'right-[7%] top-[10%] w-[28vw] max-w-[520px] aspect-[3/2] max-md:-right-[8%] max-md:top-[8%] max-md:w-[48vw]',
-    start: 0.08,
+    className: 'left-[38%] top-[10%] w-[28vw] max-w-[520px] aspect-[3/2] max-md:left-[27%] max-md:top-[11%] max-md:w-[48vw]',
+    start: 0.10,
+    duration: 0.38,
     drift: 18,
     label: { ru: 'Рабочий процесс', en: 'Work in progress' },
     dimensions: '1600 × 1067 px',
@@ -46,8 +49,9 @@ const blocks: VisualBlock[] = [
   {
     id: 'portrait',
     kind: 'photo',
-    className: 'left-[4%] top-[22%] w-[19vw] max-w-[350px] aspect-[4/5] max-md:-left-[9%] max-md:top-[24%] max-md:w-[43vw]',
-    start: 0.14,
+    className: 'left-[38%] top-[29%] w-[19vw] max-w-[350px] aspect-[4/5] max-md:left-[27%] max-md:top-[25%] max-md:w-[43vw]',
+    start: 0.20,
+    duration: 0.38,
     drift: -12,
     label: { ru: 'Главный портрет', en: 'Main portrait' },
     dimensions: '1200 × 1500 px',
@@ -55,8 +59,9 @@ const blocks: VisualBlock[] = [
   {
     id: 'apl',
     kind: 'experience',
-    className: 'left-[5%] bottom-[3%] w-[16vw] min-w-[190px] max-w-[300px] aspect-[4/5] max-md:left-[2%] max-md:bottom-[2%] max-md:w-[38vw] max-md:min-w-0',
-    start: 0.22,
+    className: 'left-[38%] bottom-[3%] w-[16vw] min-w-[190px] max-w-[300px] aspect-[4/5] max-md:left-[27%] max-md:bottom-[2%] max-md:w-[38vw] max-md:min-w-0',
+    start: 0.30,
+    duration: 0.38,
     drift: 16,
     label: { ru: 'Опыт работы', en: 'Experience' },
     company: 'APL GO',
@@ -67,8 +72,9 @@ const blocks: VisualBlock[] = [
   {
     id: 'detail',
     kind: 'photo',
-    className: 'right-[24%] bottom-[4%] w-[13vw] max-w-[230px] aspect-square max-md:right-[3%] max-md:bottom-[4%] max-md:w-[30vw]',
-    start: 0.29,
+    className: 'left-[38%] top-[8%] w-[13vw] max-w-[230px] aspect-square max-md:left-[27%] max-md:top-[9%] max-md:w-[30vw]',
+    start: 0.40,
+    duration: 0.36,
     drift: -20,
     label: { ru: 'Эскизы и детали', en: 'Sketches and details' },
     dimensions: '1200 × 1200 px',
@@ -76,8 +82,9 @@ const blocks: VisualBlock[] = [
   {
     id: 'vk',
     kind: 'experience',
-    className: '-right-[2%] top-[42%] w-[19vw] min-w-[230px] max-w-[360px] aspect-[3/2] max-md:-right-[8%] max-md:top-[32%] max-md:w-[46vw] max-md:min-w-0',
-    start: 0.36,
+    className: 'left-[38%] top-[44%] w-[19vw] min-w-[230px] max-w-[360px] aspect-[3/2] max-md:left-[27%] max-md:top-[32%] max-md:w-[46vw] max-md:min-w-0',
+    start: 0.51,
+    duration: 0.38,
     drift: 14,
     label: { ru: 'Текущее место работы', en: 'Current role' },
     company: 'VK Видео',
@@ -88,8 +95,9 @@ const blocks: VisualBlock[] = [
   {
     id: 'atmosphere',
     kind: 'photo',
-    className: 'left-[25%] bottom-[-12%] w-[14vw] max-w-[260px] aspect-[3/4] max-md:left-[40%] max-md:bottom-[-8%] max-md:w-[31vw]',
-    start: 0.43,
+    className: 'left-[38%] bottom-[-10%] w-[14vw] max-w-[260px] aspect-[3/4] max-md:left-[27%] max-md:bottom-[-7%] max-md:w-[31vw]',
+    start: 0.62,
+    duration: 0.36,
     drift: 24,
     label: { ru: 'Атмосферный портрет', en: 'Atmospheric portrait' },
     dimensions: '1200 × 1600 px',
@@ -133,21 +141,28 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
         rootRef.current.style.visibility = progress > 0.005 ? 'visible' : 'hidden';
       }
 
-      const copyProgress = clamp((progress - 0.12) / 0.32);
-      const copyEase = 1 - Math.pow(1 - copyProgress, 3);
+      const copyRaw = (progress - 0.40) / 0.48;
+      const copyProgress = clamp(copyRaw);
+      const copyOpacity = copyRaw > 0 && copyRaw < 1
+        ? Math.min(1, copyProgress / 0.08, (1 - copyProgress) / 0.08)
+        : 0;
       if (copyRef.current) {
-        copyRef.current.style.opacity = String(copyProgress);
-        copyRef.current.style.transform = `translate3d(${(1 - copyEase) * 18}vw, ${(1 - copyEase) * 18}px, 0)`;
+        const copyX = prefersReducedMotion ? 0 : 100 - copyProgress * 220;
+        copyRef.current.style.opacity = String(copyOpacity);
+        copyRef.current.style.transform = `translate3d(${copyX}vw, 0, 0)`;
       }
 
       blocks.forEach((block, index) => {
         const element = blockRefs.current[index];
         if (!element) return;
-        const local = clamp((progress - block.start) / 0.32);
-        const ease = 1 - Math.pow(1 - local, 3);
-        const x = (1 - ease) * (36 + index * 4);
-        const y = ease * block.drift * progress;
-        element.style.opacity = String(local);
+        const rawLocal = (progress - block.start) / block.duration;
+        const local = clamp(rawLocal);
+        const opacity = rawLocal > 0 && rawLocal < 1
+          ? Math.min(1, local / 0.08, (1 - local) / 0.08)
+          : 0;
+        const x = prefersReducedMotion ? 0 : 100 - local * 220;
+        const y = prefersReducedMotion ? 0 : Math.sin(local * Math.PI) * block.drift;
+        element.style.opacity = String(opacity);
         element.style.transform = `translate3d(${x}vw, ${y}px, 0)`;
       });
 
@@ -170,7 +185,7 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
     >
       <div
         ref={copyRef}
-        className="absolute left-[34%] top-[28%] z-20 w-[34vw] max-w-[620px] opacity-0 max-md:left-[7%] max-md:top-[44%] max-md:w-[86%]"
+        className="absolute left-[31%] top-[26%] z-20 w-[38vw] max-w-[680px] opacity-0 max-md:left-[7%] max-md:top-[37%] max-md:w-[86%]"
         style={{ willChange: 'transform, opacity' }}
       >
         <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100/75 md:text-xs">
