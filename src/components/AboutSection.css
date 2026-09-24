@@ -1,3 +1,27 @@
+.about-caption { position: static; margin-bottom: 12px; }
+.about-caption p { font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.about-caption p + p { margin-top: 4px; }
+.about-caption > div { display: block; }
+.about-frame { aspect-ratio: auto; }
+.about-image { position: relative; inset: auto; width: 100%; aspect-ratio: 3 / 2; }
+.about-frame--portrait .about-image, .about-frame--apl .about-image { aspect-ratio: 4 / 5; }
+.about-frame--detail .about-image { aspect-ratio: 1; }
+.about-frame--atmosphere .about-image { aspect-ratio: 3 / 4; }
+@media (orientation: landscape) {
+  .about-track { width: calc(224vh + clamp(320px, 46vh, 600px)); }
+  .about-frame--a2b, .about-frame--portrait, .about-frame--apl, .about-frame--vk { top: 2%; }
+  .about-copy {
+    left: 108vh; top: 12%; bottom: auto;
+    width: clamp(320px, 46vh, 600px);
+  }
+  .about-copy h2 { font-size: clamp(22px, 3.2vh, 36px); line-height: 1.12; }
+  .about-copy > p { font-size: clamp(15px, 1.9vh, 20px); line-height: 1.5; }
+  .about-copy > p:first-child { font-size: 13px; }
+  .about-frame--apl { left: calc(120vh + clamp(320px, 46vh, 600px)); }
+  .about-frame--detail { left: calc(133vh + clamp(320px, 46vh, 600px)); }
+  .about-frame--vk { left: calc(178vh + clamp(320px, 46vh, 600px)); }
+  .about-frame--atmosphere { left: calc(192vh + clamp(320px, 46vh, 600px)); }
+}
 /* Portrait uses a vertical editorial flow. Captions contribute to its height,
    so longer translations never overlap the preceding photograph. */
 @media (orientation: portrait) {
@@ -24,8 +48,8 @@
   .about-frame--portrait { order: 3; width: 50vw; }
   .about-frame--portrait .about-image { aspect-ratio: 4 / 5; }
   .about-copy { order: 4; width: 50vw; margin-top: -6vw; }
-  .about-copy h2 { font-size: clamp(16px, 4.3vw, 28px); line-height: 1.1; }
-  .about-copy > p { font-size: clamp(12px, 3.3vw, 18px); line-height: 1.35; }
+  .about-copy h2 { font-size: clamp(20px, 4.8vw, 30px); line-height: 1.15; }
+  .about-copy > p { font-size: clamp(14px, 3.6vw, 19px); line-height: 1.45; }
   .about-frame--apl { order: 5; width: 28vw; align-self: flex-end; }
   .about-frame--apl .about-image { aspect-ratio: 4 / 5; }
   .about-frame--detail { order: 6; width: 36vw; margin-left: 12vw; }

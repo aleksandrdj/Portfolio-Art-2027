@@ -116,8 +116,13 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
       if (rootRef.current && trackRef.current) {
         const track = trackRef.current;
         const viewport = portrait.matches ? rootRef.current.clientHeight : rootRef.current.clientWidth;
-        const extent = portrait.matches ? track.offsetHeight : track.offsetWidth;
-        const offset = viewport + 16 - progress * (viewport + extent + 32);
+        const last = track.querySelector<HTMLElement>('.about-frame--atmosphere');
+        const extent = last
+          ? (portrait.matches ? last.offsetTop + last.offsetHeight : last.offsetLeft + last.offsetWidth)
+          : (portrait.matches ? track.offsetHeight : track.offsetWidth);
+        const start = viewport + 16;
+        const end = viewport * 0.9 - extent;
+        const offset = start + progress * (end - start);
         track.style.transform = portrait.matches
           ? `translate3d(0, ${offset}px, 0)`
           : `translate3d(${offset}px, 0, 0)`;
