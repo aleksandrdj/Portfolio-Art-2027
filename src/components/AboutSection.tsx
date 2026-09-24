@@ -206,32 +206,42 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
         <div
           key={block.id}
           ref={(element) => { blockRefs.current[index] = element; }}
-          className={`absolute overflow-hidden bg-black text-white opacity-0 shadow-[0_24px_80px_rgba(0,25,40,0.22)] ${block.className}`}
+          className={`absolute overflow-visible text-white opacity-0 ${block.className}`}
           style={{ willChange: 'transform, opacity' }}
         >
-          {block.kind === 'photo' ? (
-            <div className="flex h-full flex-col justify-between p-4 md:p-5">
-              <span className="text-[9px] uppercase tracking-[0.16em] text-white/42 md:text-[10px]">{text.photo}</span>
+          <div className="absolute bottom-full left-0 mb-2.5 w-full md:mb-3">
+            {block.kind === 'photo' ? (
+              <div className="flex items-end justify-between gap-3">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/72 md:text-[11px]">
+                  {block.label[language]}
+                </p>
+                <p className="shrink-0 font-mono text-[8px] text-white/38 md:text-[9px]">
+                  {block.dimensions}
+                </p>
+              </div>
+            ) : (
               <div>
-                <p className="text-xs font-medium md:text-sm">{block.label[language]}</p>
-                <p className="mt-1 font-mono text-[9px] text-white/44 md:text-[10px]">{block.dimensions}</p>
+                <div className="flex items-end justify-between gap-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-white/78 md:text-xs">
+                    {block.company}
+                  </p>
+                  <p className="shrink-0 font-mono text-[8px] text-cyan-100/48 md:text-[9px]">
+                    {block.dates?.[language]}
+                  </p>
+                </div>
+                <p className="mt-1 text-[8px] leading-snug text-white/48 md:text-[10px]">
+                  {block.role?.[language]}
+                </p>
               </div>
-            </div>
-          ) : (
-            <div className="flex h-full flex-col justify-between p-4 md:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <span className="text-[9px] uppercase tracking-[0.16em] text-white/42 md:text-[10px]">{block.label[language]}</span>
-                <span className="text-right font-mono text-[8px] leading-relaxed text-white/28 md:text-[9px]">
-                  {text.logo}<br />{block.dimensions}
-                </span>
-              </div>
-              <div>
-                <p className="text-base font-semibold tracking-tight md:text-xl">{block.company}</p>
-                <p className="mt-1 text-[10px] leading-snug text-white/64 md:text-xs">{block.role?.[language]}</p>
-                <p className="mt-3 font-mono text-[9px] text-cyan-100/55 md:text-[10px]">{block.dates?.[language]}</p>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          <div
+            className="h-full w-full overflow-hidden bg-black shadow-[0_24px_80px_rgba(0,25,40,0.22)]"
+            aria-label={block.kind === 'photo' ? text.photo : text.logo}
+          >
+            <div className="h-full w-full bg-[linear-gradient(135deg,rgba(255,255,255,0.035),transparent_42%,rgba(255,255,255,0.018))]" />
+          </div>
         </div>
       ))}
     </section>
