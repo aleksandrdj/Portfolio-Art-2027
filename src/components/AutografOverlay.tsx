@@ -11,9 +11,10 @@ const strokes = [
 ];
 interface Props {
   scrollProgressRef: React.MutableRefObject<number>;
+  exitProgressRef?: React.MutableRefObject<number>;
   appState: string;
 }
-export const AutografOverlay: React.FC<Props> = ({ scrollProgressRef, appState }) => {
+export const AutografOverlay: React.FC<Props> = ({ scrollProgressRef, exitProgressRef, appState }) => {
   const id = useId().replace(/:/g, '');
   const container = useRef<HTMLDivElement>(null);
   const guides = useRef<(SVGPathElement | null)[]>([]);
@@ -22,7 +23,13 @@ export const AutografOverlay: React.FC<Props> = ({ scrollProgressRef, appState }
     let raf = 0;
     const update = () => {
       const p = Math.min(1, Math.max(0, (scrollProgressRef.current - .30) / .58));
-      if (container.current) container.current.style.visibility = p > 0 ? 'visible' : 'hidden';
+      const exit = Math.min(1, Math.max(0, exitProgressRef?.current ?? 0));
+      const exitEase = exit * exit * (3 - 2 * exit);
+      if (container.current) {
+        container.current.style.visibility = p > 0 && exit < 0.99 ? 'visible' : 'hidden';
+        container.current.style.opacity = String(1 - exitEase);
+        container.current.style.transform = `translate3d(0, ${-exitEase * 115}svh, 0)`;
+      }
       strokes.forEach((stroke, i) => {
         const t = Math.min(1, Math.max(0, (p - stroke.start) / (stroke.end - stroke.start)));
         const el = guides.current[i];
@@ -35,7 +42,7 @@ export const AutografOverlay: React.FC<Props> = ({ scrollProgressRef, appState }
     };
     update();
     return () => cancelAnimationFrame(raf);
-  }, [appState, scrollProgressRef]);
+  }, [appState, scrollProgressRef, exitProgressRef]);
   if (appState !== 'ready') return null;
   return <div ref={container} id="autograf-overlay-container" className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center select-none" style={{ visibility: 'hidden' }} aria-hidden="true">
     <div className="w-[76vw] md:w-[48vw] max-w-[820px]" style={{ transform: 'translateY(-2%)' }}>
