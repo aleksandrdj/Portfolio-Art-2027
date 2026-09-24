@@ -11,9 +11,6 @@ interface Props {
 interface VisualBlock {
   id: string;
   className: string;
-  start: number;
-  duration: number;
-  drift: number;
   kind: 'photo' | 'experience';
   label: { ru: string; en: string };
   dimensions?: string;
@@ -26,10 +23,7 @@ const blocks: VisualBlock[] = [
   {
     id: 'a2b',
     kind: 'experience',
-    className: 'left-[38%] -top-[3%] w-[18vw] min-w-[210px] max-w-[330px] aspect-[3/2] max-md:left-[27%] max-md:top-[4%] max-md:w-[44vw] max-md:min-w-0',
-    start: 0.00,
-    duration: 0.38,
-    drift: -22,
+    className: 'left-0 top-[9%] w-[24vh] aspect-[3/2]',
     label: { ru: 'Опыт работы', en: 'Experience' },
     company: 'A2b Creative Agency',
     role: { ru: 'Старший дизайнер и руководитель команды', en: 'Senior Designer and Team Lead' },
@@ -39,30 +33,21 @@ const blocks: VisualBlock[] = [
   {
     id: 'work',
     kind: 'photo',
-    className: 'left-[38%] top-[10%] w-[28vw] max-w-[520px] aspect-[3/2] max-md:left-[27%] max-md:top-[11%] max-md:w-[48vw]',
-    start: 0.10,
-    duration: 0.38,
-    drift: 18,
+    className: 'left-[12vh] bottom-[3%] w-[28vh] aspect-[3/2]',
     label: { ru: 'Рабочий процесс', en: 'Work in progress' },
     dimensions: '1600 × 1067 px',
   },
   {
     id: 'portrait',
     kind: 'photo',
-    className: 'left-[38%] top-[29%] w-[19vw] max-w-[350px] aspect-[4/5] max-md:left-[27%] max-md:top-[25%] max-md:w-[43vw]',
-    start: 0.20,
-    duration: 0.38,
-    drift: -12,
+    className: 'left-[54vh] top-[6%] w-[46vh] aspect-[4/5]',
     label: { ru: 'Главный портрет', en: 'Main portrait' },
     dimensions: '1200 × 1500 px',
   },
   {
     id: 'apl',
     kind: 'experience',
-    className: 'left-[38%] bottom-[3%] w-[16vw] min-w-[190px] max-w-[300px] aspect-[4/5] max-md:left-[27%] max-md:bottom-[2%] max-md:w-[38vw] max-md:min-w-0',
-    start: 0.30,
-    duration: 0.38,
-    drift: 16,
+    className: 'left-[116vh] top-[10%] w-[23vh] aspect-[4/5]',
     label: { ru: 'Опыт работы', en: 'Experience' },
     company: 'APL GO',
     role: { ru: 'Ведущий бренд-дизайнер', en: 'Lead Brand Designer' },
@@ -72,20 +57,14 @@ const blocks: VisualBlock[] = [
   {
     id: 'detail',
     kind: 'photo',
-    className: 'left-[38%] top-[8%] w-[13vw] max-w-[230px] aspect-square max-md:left-[27%] max-md:top-[9%] max-md:w-[30vw]',
-    start: 0.40,
-    duration: 0.36,
-    drift: -20,
+    className: 'left-[129vh] bottom-[3%] w-[29vh] aspect-square',
     label: { ru: 'Эскизы и детали', en: 'Sketches and details' },
     dimensions: '1200 × 1200 px',
   },
   {
     id: 'vk',
     kind: 'experience',
-    className: 'left-[38%] top-[44%] w-[19vw] min-w-[230px] max-w-[360px] aspect-[3/2] max-md:left-[27%] max-md:top-[32%] max-md:w-[46vw] max-md:min-w-0',
-    start: 0.51,
-    duration: 0.38,
-    drift: 14,
+    className: 'left-[174vh] top-[12%] w-[28vh] aspect-[3/2]',
     label: { ru: 'Текущее место работы', en: 'Current role' },
     company: 'VK Видео',
     role: { ru: 'Старший арт-директор', en: 'Senior Art Director' },
@@ -95,10 +74,7 @@ const blocks: VisualBlock[] = [
   {
     id: 'atmosphere',
     kind: 'photo',
-    className: 'left-[38%] bottom-[-10%] w-[14vw] max-w-[260px] aspect-[3/4] max-md:left-[27%] max-md:bottom-[-7%] max-md:w-[31vw]',
-    start: 0.62,
-    duration: 0.36,
-    drift: 24,
+    className: 'left-[188vh] bottom-[3%] w-[24vh] aspect-[3/4]',
     label: { ru: 'Атмосферный портрет', en: 'Atmospheric portrait' },
     dimensions: '1200 × 1600 px',
   },
@@ -127,44 +103,22 @@ const clamp = (value: number) => Math.min(1, Math.max(0, value));
 
 export const AboutSection: React.FC<Props> = ({ appState, language, progressRef, prefersReducedMotion }) => {
   const rootRef = useRef<HTMLElement>(null);
-  const copyRef = useRef<HTMLDivElement>(null);
-  const blockRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const trackRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (appState !== 'ready') return;
     let frame = 0;
 
     const update = () => {
-      const rawProgress = clamp(progressRef.current);
-      const progress = prefersReducedMotion ? (rawProgress > 0.005 ? 1 : 0) : rawProgress;
-      if (rootRef.current) {
+      const progress = clamp(progressRef.current);
+      if (rootRef.current && trackRef.current) {
+        const viewport = rootRef.current.clientWidth;
+        const track = trackRef.current;
+        // Move the entire composition, preserving every gap and caption position.
+        const travel = viewport + track.offsetWidth + 32;
+        track.style.transform = `translate3d(${viewport + 16 - progress * travel}px, 0, 0)`;
         rootRef.current.style.visibility = progress > 0.005 ? 'visible' : 'hidden';
       }
-
-      const copyRaw = (progress - 0.40) / 0.48;
-      const copyProgress = clamp(copyRaw);
-      const copyOpacity = copyRaw > 0 && copyRaw < 1
-        ? Math.min(1, copyProgress / 0.08, (1 - copyProgress) / 0.08)
-        : 0;
-      if (copyRef.current) {
-        const copyX = prefersReducedMotion ? 0 : 100 - copyProgress * 220;
-        copyRef.current.style.opacity = String(copyOpacity);
-        copyRef.current.style.transform = `translate3d(${copyX}vw, 0, 0)`;
-      }
-
-      blocks.forEach((block, index) => {
-        const element = blockRefs.current[index];
-        if (!element) return;
-        const rawLocal = (progress - block.start) / block.duration;
-        const local = clamp(rawLocal);
-        const opacity = rawLocal > 0 && rawLocal < 1
-          ? Math.min(1, local / 0.08, (1 - local) / 0.08)
-          : 0;
-        const x = prefersReducedMotion ? 0 : 100 - local * 220;
-        const y = prefersReducedMotion ? 0 : Math.sin(local * Math.PI) * block.drift;
-        element.style.opacity = String(opacity);
-        element.style.transform = `translate3d(${x}vw, ${y}px, 0)`;
-      });
 
       frame = requestAnimationFrame(update);
     };
@@ -183,35 +137,33 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
       className="invisible pointer-events-none absolute inset-0 z-[35] overflow-hidden text-white"
       aria-label={text.eyebrow}
     >
+      <div className="absolute inset-x-0 top-[10%] h-[80%] overflow-hidden">
+      <div ref={trackRef} className="absolute top-0 h-full w-[220vh]" style={{ willChange: 'transform' }}>
       <div
-        ref={copyRef}
-        className="absolute left-[31%] top-[26%] z-20 w-[38vw] max-w-[680px] opacity-0 max-md:left-[7%] max-md:top-[37%] max-md:w-[86%]"
-        style={{ willChange: 'transform, opacity' }}
+        className="absolute left-[54vh] bottom-[2%] w-[46vh]"
       >
-        <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100/75 md:text-xs">
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100/75 md:text-xs">
           {text.eyebrow}
         </p>
-        <h2 className="max-w-[16ch] text-[clamp(2rem,3.5vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.045em]">
+        <h2 className="max-w-[26ch] text-[clamp(1rem,2.4vh,1.8rem)] font-semibold leading-[0.98] tracking-[-0.045em]">
           {text.title}
         </h2>
-        <p className="mt-6 max-w-[58ch] text-sm leading-relaxed text-white/78 md:text-base">
+        <p className="mt-2 max-w-[58ch] text-[clamp(10px,1.35vh,14px)] leading-snug text-white/78">
           {text.body}
         </p>
-        <p className="mt-5 max-w-[48ch] text-xs leading-relaxed text-cyan-100/65 md:text-sm">
+        <p className="mt-2 max-w-[48ch] text-[clamp(9px,1.2vh,12px)] leading-snug text-cyan-100/65">
           {text.note}
         </p>
       </div>
 
-      {blocks.map((block, index) => (
+      {blocks.map((block) => (
         <div
           key={block.id}
-          ref={(element) => { blockRefs.current[index] = element; }}
-          className={`absolute overflow-visible text-white opacity-0 ${block.className}`}
-          style={{ willChange: 'transform, opacity' }}
+          className={`absolute overflow-visible text-white ${block.className}`}
         >
           <div className="absolute bottom-full left-0 mb-2.5 w-full md:mb-3">
             {block.kind === 'photo' ? (
-              <div className="flex items-end justify-between gap-3">
+              <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
                 <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/72 md:text-[11px]">
                   {block.label[language]}
                 </p>
@@ -221,7 +173,7 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
               </div>
             ) : (
               <div>
-                <div className="flex items-end justify-between gap-3">
+                <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-white/78 md:text-xs">
                     {block.company}
                   </p>
@@ -237,13 +189,15 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
           </div>
 
           <div
-            className="h-full w-full overflow-hidden bg-black shadow-[0_24px_80px_rgba(0,25,40,0.22)]"
+            className="absolute inset-0 overflow-hidden bg-black"
             aria-label={block.kind === 'photo' ? text.photo : text.logo}
           >
             <div className="h-full w-full bg-[linear-gradient(135deg,rgba(255,255,255,0.035),transparent_42%,rgba(255,255,255,0.018))]" />
           </div>
         </div>
       ))}
+      </div>
+      </div>
     </section>
   );
 };
