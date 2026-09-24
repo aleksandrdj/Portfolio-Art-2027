@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Language } from '../types';
+import './AboutSection.css';
 
 interface Props {
   appState: string;
@@ -108,15 +109,18 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
   useEffect(() => {
     if (appState !== 'ready') return;
     let frame = 0;
+    const portrait = window.matchMedia('(orientation: portrait)');
 
     const update = () => {
       const progress = clamp(progressRef.current);
       if (rootRef.current && trackRef.current) {
-        const viewport = rootRef.current.clientWidth;
         const track = trackRef.current;
-        // Move the entire composition, preserving every gap and caption position.
-        const travel = viewport + track.offsetWidth + 32;
-        track.style.transform = `translate3d(${viewport + 16 - progress * travel}px, 0, 0)`;
+        const viewport = portrait.matches ? rootRef.current.clientHeight : rootRef.current.clientWidth;
+        const extent = portrait.matches ? track.offsetHeight : track.offsetWidth;
+        const offset = viewport + 16 - progress * (viewport + extent + 32);
+        track.style.transform = portrait.matches
+          ? `translate3d(0, ${offset}px, 0)`
+          : `translate3d(${offset}px, 0, 0)`;
         rootRef.current.style.visibility = progress > 0.005 ? 'visible' : 'hidden';
       }
 
@@ -137,10 +141,10 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
       className="invisible pointer-events-none absolute inset-0 z-[35] overflow-hidden text-white"
       aria-label={text.eyebrow}
     >
-      <div className="absolute inset-x-0 top-[10%] h-[80%] overflow-hidden">
-      <div ref={trackRef} className="absolute top-0 h-full w-[220vh]" style={{ willChange: 'transform' }}>
+      <div className="about-window absolute inset-x-0 top-[10%] h-[80%] overflow-hidden">
+      <div ref={trackRef} className="about-track absolute top-0 h-full w-[220vh]" style={{ willChange: 'transform' }}>
       <div
-        className="absolute left-[54vh] bottom-[2%] w-[46vh]"
+        className="about-copy absolute left-[54vh] bottom-[2%] w-[46vh]"
       >
         <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100/75 md:text-xs">
           {text.eyebrow}
@@ -159,9 +163,9 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
       {blocks.map((block) => (
         <div
           key={block.id}
-          className={`absolute overflow-visible text-white ${block.className}`}
+          className={`about-frame about-frame--${block.id} absolute overflow-visible text-white ${block.className}`}
         >
-          <div className="absolute bottom-full left-0 mb-2.5 w-full md:mb-3">
+          <div className="about-caption absolute bottom-full left-0 mb-2.5 w-full md:mb-3">
             {block.kind === 'photo' ? (
               <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
                 <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/72 md:text-[11px]">
@@ -189,7 +193,7 @@ export const AboutSection: React.FC<Props> = ({ appState, language, progressRef,
           </div>
 
           <div
-            className="absolute inset-0 overflow-hidden bg-black"
+            className="about-image absolute inset-0 overflow-hidden bg-black"
             aria-label={block.kind === 'photo' ? text.photo : text.logo}
           >
             <div className="h-full w-full bg-[linear-gradient(135deg,rgba(255,255,255,0.035),transparent_42%,rgba(255,255,255,0.018))]" />
