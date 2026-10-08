@@ -1,0 +1,29 @@
+.aplgo-project .project-hero { aspect-ratio: 3000 / 1273; object-fit: cover; }
+.aplgo-intro { padding-bottom: clamp(72px, 9vw, 148px); }
+.aplgo-facts { display: grid; gap: 14px; max-width: 420px; margin: clamp(40px, 5vw, 80px) 0 0; }
+.aplgo-facts > div { display: grid; grid-template-columns: 96px 1fr; gap: 20px; padding-top: 12px; border-top: 1px solid #dce1e2; }
+.aplgo-facts dt { color: #738084; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.aplgo-facts dd { margin: 0; font-size: 13px; line-height: 1.45; }
+.aplgo-gallery { max-width: 1800px; margin: auto; padding: 0 clamp(18px, 3vw, 54px); }
+.aplgo-chapter + .aplgo-chapter { margin-top: clamp(100px, 13vw, 220px); }
+.aplgo-chapter-heading { display: grid; grid-template-columns: 1.1fr .9fr; column-gap: 7vw; align-items: end; margin-bottom: clamp(28px, 4vw, 64px); padding-top: 18px; border-top: 1px solid #ccd7db; }
+.aplgo-chapter-heading span { grid-column: 1 / -1; margin-bottom: 34px; color: #007fa6; font-size: 11px; font-weight: 600; letter-spacing: .12em; }
+.aplgo-chapter-heading h3 { margin: 0; font-size: clamp(35px, 5.6vw, 84px); font-weight: 500; line-height: 1; letter-spacing: -.055em; }
+.aplgo-chapter-heading p { max-width: 34ch; margin: 0 0 5px; color: #526166; font-size: clamp(15px, 1.35vw, 19px); line-height: 1.55; }
+.aplgo-visual { margin: 0; overflow: hidden; border-radius: 8px; background: #e8eced; }
+.aplgo-visual img { display: block; width: 100%; height: auto; aspect-ratio: 2688 / 1520; object-fit: cover; }
+.aplgo-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(14px, 2vw, 36px); margin-top: clamp(14px, 2vw, 36px); }
+.aplgo-chapter > .aplgo-visual + .aplgo-pair { margin-top: clamp(14px, 2vw, 36px); }
+.aplgo-project .project-footer { max-width: 1800px; margin: auto; }
+@media (max-width: 700px) {
+  .aplgo-project .project-hero { margin-top: 76px; }
+  .aplgo-intro { padding-bottom: 80px; }
+  .aplgo-facts { margin-top: 42px; }
+  .aplgo-chapter + .aplgo-chapter { margin-top: 108px; }
+  .aplgo-chapter-heading { grid-template-columns: 1fr; gap: 16px; margin-bottom: 28px; }
+  .aplgo-chapter-heading span { margin-bottom: 8px; }
+  .aplgo-chapter-heading h3 { font-size: clamp(36px, 10vw, 56px); }
+  .aplgo-chapter-heading p { max-width: 31ch; }
+  .aplgo-pair { grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }
+  .aplgo-chapter > .aplgo-visual + .aplgo-pair { margin-top: 16px; }
+}

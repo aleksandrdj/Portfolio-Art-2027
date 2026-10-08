@@ -1,0 +1,20 @@
+.emollent-project .project-hero { aspect-ratio: 3000 / 1273; object-fit: cover; }
+.emollent-intro { padding-bottom: clamp(80px, 10vw, 160px); }
+.emollent-intro h2 { max-width: 8ch; overflow-wrap: normal; font-size: clamp(44px, 6vw, 96px); }
+.emollent-gallery { max-width: 1800px; margin: auto; padding: 0 clamp(18px, 3vw, 54px); }
+.emollent-section-heading { display: grid; grid-template-columns: .9fr 1.1fr; align-items: end; gap: 6vw; margin-bottom: clamp(28px, 4vw, 60px); padding-top: 20px; border-top: 1px solid #ddd8cf; }
+.emollent-section-heading span { font-size: 11px; letter-spacing: .12em; color: #82766b; }
+.emollent-section-heading h3 { max-width: 16ch; margin: 0; font-size: clamp(32px, 5vw, 76px); font-weight: 500; line-height: 1.05; letter-spacing: -.05em; }
+.emollent-section-heading--products { margin-top: clamp(90px, 11vw, 180px); }
+.emollent-visual { margin: 0; overflow: hidden; border-radius: 8px; background: #f3f0eb; }
+.emollent-visual img { display: block; width: 100%; height: auto; }
+.emollent-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2vw, 36px); margin: clamp(16px, 2vw, 36px) 0; }
+.emollent-project .project-footer { max-width: 1800px; margin: auto; }
+@media (max-width: 700px) {
+  .emollent-project .project-hero { margin-top: 76px; }
+  .emollent-intro { padding-bottom: 80px; }
+  .emollent-section-heading { grid-template-columns: 1fr; gap: 18px; }
+  .emollent-section-heading h3 { font-size: clamp(36px, 10vw, 54px); }
+  .emollent-section-heading--products { margin-top: 90px; }
+  .emollent-pair { grid-template-columns: 1fr; gap: 16px; margin: 16px 0; }
+}

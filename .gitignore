@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local review captures and source exports
+artifacts/
+public/aplgo/

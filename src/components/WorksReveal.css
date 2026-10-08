@@ -1,0 +1,8 @@
+.works-reveal { position: relative; z-index: 1; width: 100%; height: 100svh; margin-top: -20svh; overflow: hidden; background: #fff; }
+.works-reveal.is-playing { background: transparent; }
+html.works-transition-active #portfolio-screen > div:first-child { position: fixed !important; inset: 0; width: 100%; }
+.works-reveal-stage { position: absolute; inset: 0; background: #fff; }
+.works-reveal-stage.is-playing { position: fixed; inset: 0; z-index: 40; will-change: opacity; }
+.works-reveal img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.works-reveal-loading { position: absolute; left: max(24px, 6vw); bottom: max(24px, 6vh); color: #667579; font-size: 12px; letter-spacing: .08em; }
+@media (max-width: 700px) { .works-reveal { height: 100svh; } }

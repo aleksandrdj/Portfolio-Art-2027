@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { AutografOverlay } from './components/AutografOverlay';
+import { AboutSection } from './components/AboutSection';
 import { CentralLogo } from './components/CentralLogo';
 import { Header } from './components/Header';
 import { IntroSequence } from './components/IntroSequence';
+import { WorksSection } from './components/WorksSection';
+import { WorksReveal } from './components/WorksReveal';
 import { AppState, Language } from './types';
 import { ArtDeejayWebGL } from './webgl/ArtDeejayWebGL';
 
@@ -92,12 +95,20 @@ export default function App() {
   // Unified scroll progress reference (0.0 to 1.0)
   // Shared directly across WebGL uniforms, Autograf mask, and Header without React re-renders
   const scrollProgressRef = useRef<number>(0.0);
+  const aboutProgressRef = useRef<number>(0.0);
+  const logoExitProgressRef = useRef<number>(0);
+  const headerProgressRef = useRef<number>(0);
+  const aboutExitRef = useRef<HTMLDivElement>(null);
+  const aboutViewportRef = useRef<HTMLDivElement>(null);
+  const whiteTransitionRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Replay function accessible globally, via 'R' key, and via URL param ?intro=1
   const replayIntro = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     scrollProgressRef.current = 0.0;
+    aboutProgressRef.current = 0.0;
+    logoExitProgressRef.current = 0;
     setIsWebGLReadyFrameDrawn(false);
     setAppState('preloading');
     setIntroKey((k) => k + 1);
@@ -171,14 +182,28 @@ export default function App() {
         trigger: container,
         start: 'top top',
         end: 'bottom bottom',
-        scrub: 0.35,
+        scrub: prefersReducedMotion ? true : 0.35,
       },
       onUpdate: () => {
-        scrollProgressRef.current = progressState.value;
+        const sceneProgress = Math.min(1, progressState.value / 0.8);
+        const exit = Math.min(1, Math.max(0, (progressState.value - 0.8) / 0.2));
+        // Keep the blue gallery visible while it exits, then blend into the white Works scene.
+        const worksTop = document.getElementById('works-reveal')?.getBoundingClientRect().top;
+        const whitening = worksTop === undefined ? exit : Math.min(1, Math.max(0,
+          (window.innerHeight * 1.35 - worksTop) / (window.innerHeight * 1.25)));
+        const fade = whitening * whitening * (3 - 2 * whitening);
+        scrollProgressRef.current = Math.min(1, sceneProgress / 0.5);
+        logoExitProgressRef.current = Math.min(1, Math.max(0, (sceneProgress - 0.42) / 0.58));
+        aboutProgressRef.current = Math.min(1, Math.max(0, (sceneProgress - 0.46) / 0.54));
+        headerProgressRef.current = scrollProgressRef.current * (1 - fade);
+        if (aboutExitRef.current) {
+          aboutExitRef.current.style.transform = `translate3d(0, ${-exit * 110}svh, 0)`;
+        }
+        if (whiteTransitionRef.current) whiteTransitionRef.current.style.opacity = String(fade);
       },
     });
 
-    // Refresh dimensions on next animation frame once 240svh section is in DOM
+    // Refresh dimensions after the complete intro and about scroll scene is in the DOM.
     const rAfId = requestAnimationFrame(() => {
       ScrollTrigger.refresh();
     });
@@ -188,16 +213,18 @@ export default function App() {
       tween.scrollTrigger?.kill();
       tween.kill();
     };
-  }, [appState]);
+  }, [appState, prefersReducedMotion]);
 
   const isReady = appState === 'ready';
 
   return (
+    <>
+      <Header isVisible={isReady} language={language} onLanguageChange={setLanguage} scrollProgressRef={headerProgressRef} />
     <div
       ref={scrollContainerRef}
       id="portfolio-screen"
       className={`relative w-full select-none transition-colors duration-700 ease-in-out ${
-        isReady ? 'h-[240svh]' : 'h-[100svh]'
+        isReady ? 'h-[787.5svh] portrait:h-[975svh]' : 'h-[100svh]'
       } ${isReady ? 'bg-[#FFFFFF]' : 'bg-[#000000]'}`}
     >
       {/* Sticky scene container (100svh viewport pinned during transition distance) */}
@@ -207,12 +234,6 @@ export default function App() {
         }`}
       >
         {/* Layer 7: Minimalist Header (z-50) */}
-        <Header
-          isVisible={isReady}
-          language={language}
-          onLanguageChange={setLanguage}
-          scrollProgressRef={scrollProgressRef}
-        />
 
         {/* WebGL Canvas:
             Layer 1 (White base),
@@ -233,13 +254,27 @@ export default function App() {
           appState={appState}
           prefersReducedMotion={prefersReducedMotion}
           scrollProgressRef={scrollProgressRef}
+          exitProgressRef={logoExitProgressRef}
         />
 
         {/* Layer 5: Progressive Autograf Signature Overlay (Pure white over Logo, z-30) */}
         <AutografOverlay
           appState={appState}
           scrollProgressRef={scrollProgressRef}
+          exitProgressRef={logoExitProgressRef}
         />
+
+        <div ref={whiteTransitionRef} aria-hidden="true" className="absolute inset-0 z-[32] bg-white pointer-events-none" style={{ opacity: 0 }} />
+        <div ref={aboutViewportRef} className="absolute inset-0 z-[35] overflow-hidden">
+          <div ref={aboutExitRef} className="absolute inset-0" style={{ willChange: 'transform' }}>
+            <AboutSection
+              appState={appState}
+              language={language}
+              progressRef={aboutProgressRef}
+              prefersReducedMotion={prefersReducedMotion}
+            />
+          </div>
+        </div>
 
         {/* Sequential Intro (preloading -> logoSequence -> video -> whiteCover) (z-40) */}
         {!isReady && (
@@ -253,5 +288,7 @@ export default function App() {
         )}
       </div>
     </div>
+      {isReady && <><WorksReveal reducedMotion={prefersReducedMotion} /><WorksSection language={language} /></>}
+    </>
   );
 }

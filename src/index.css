@@ -1,10 +1,28 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Plus Jakarta Sans', Arial, sans-serif;
+}
+
+:focus-visible { outline: 2px solid #38cbd7; outline-offset: 6px; }
+::selection { background: #b3f5ed; color: #102426; }
+.about-copy { user-select: text; }
+#main-header { padding-top: max(16px, env(safe-area-inset-top)); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; }
+}
+
 html {
   width: 100%;
   min-height: 100%;
   margin: 0;
   padding: 0;
+}
+
+/* Keep scrolling within the scene without rubber-banding past its edges. */
+html, body {
+  overscroll-behavior: none;
+  overflow-x: clip;
 }
 
 body {
@@ -36,4 +54,3 @@ html.intro-running body {
 .bg-ready {
   background-color: #FFFFFF;
 }
-

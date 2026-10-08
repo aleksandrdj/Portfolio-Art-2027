@@ -16,8 +16,8 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const headerRef = useRef<HTMLElement>(null);
   const brandNameRef = useRef<HTMLSpanElement>(null);
-  const navWorkRef = useRef<HTMLSpanElement>(null);
-  const navAboutRef = useRef<HTMLSpanElement>(null);
+  const navWorkRef = useRef<HTMLAnchorElement>(null);
+  const navAboutRef = useRef<HTMLButtonElement>(null);
   const navContactRef = useRef<HTMLSpanElement>(null);
   const langRuRef = useRef<HTMLButtonElement>(null);
   const langEnRef = useRef<HTMLButtonElement>(null);
@@ -36,10 +36,11 @@ export const Header: React.FC<HeaderProps> = ({
       // Primary text: #111111 (17) -> #FFFFFF (255)
       const primaryRgb = Math.round(17 + (255 - 17) * t);
       const primaryColor = `rgb(${primaryRgb}, ${primaryRgb}, ${primaryRgb})`;
+      if (headerRef.current) headerRef.current.style.color = primaryColor;
 
       // Secondary text: #737373 -> rgba(255, 255, 255, 0.75)
       const secRgb = Math.round(115 + (255 - 115) * t);
-      const secAlpha = 0.55 + 0.25 * t;
+      const secAlpha = 0.85 + 0.1 * t;
       const secondaryColor = `rgba(${secRgb}, ${secRgb}, ${secRgb}, ${secAlpha})`;
 
       // Divider slash
@@ -86,7 +87,7 @@ export const Header: React.FC<HeaderProps> = ({
             id="brand-author-name"
             className="text-[14px] md:text-[16px] font-medium text-neutral-900 tracking-tight font-sans select-none transition-colors"
           >
-            Alexsandr Savenkov
+            {language === 'ru' ? 'Александр Савенков' : 'Alexsandr Savenkov'}
           </span>
         </div>
 
@@ -98,20 +99,24 @@ export const Header: React.FC<HeaderProps> = ({
         >
           {/* Desktop-only inactive nav sections (no empty href="#") */}
           <div className="hidden md:flex items-center space-x-7">
-            <span
+            <a
               ref={navWorkRef}
               id="nav-item-work"
-              className="text-neutral-400 cursor-default tracking-wide font-normal select-none transition-colors"
+              href="#works"
+              className="min-h-[44px] inline-flex items-center text-neutral-400 cursor-pointer hover:underline underline-offset-4 tracking-wide font-normal select-none transition-colors"
             >
               {language === 'ru' ? 'Работы' : 'Work'}
-            </span>
-            <span
+            </a>
+            <button
+              type="button"
+              disabled={!isVisible}
+              onClick={() => window.dispatchEvent(new Event('portfolio:about'))}
               ref={navAboutRef}
               id="nav-item-about"
-              className="text-neutral-400 cursor-default tracking-wide font-normal select-none transition-colors"
+              className="min-h-[44px] text-neutral-400 cursor-pointer hover:underline underline-offset-4 tracking-wide font-normal select-none transition-colors"
             >
               {language === 'ru' ? 'Обо мне' : 'About'}
-            </span>
+            </button>
             <span
               ref={navContactRef}
               id="nav-item-contact"
@@ -122,6 +127,9 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Language Switcher RU / EN with 44x44px touch targets and visible focus */}
+          <a href="#works" className="md:hidden min-h-[44px] inline-flex items-center" style={{ color: 'inherit' }}>
+            {language === 'ru' ? 'Работы' : 'Work'}
+          </a>
           <div
             id="language-switcher"
             className="flex items-center text-xs md:text-sm font-mono tracking-wider"

@@ -16,6 +16,7 @@ precision highp float;
 
 in vec2 v_uv;
 
+uniform sampler2D u_fluidMask;
 uniform vec2 u_resolution;
 uniform float u_time;
 uniform float u_opacity;
@@ -60,13 +61,11 @@ void main() {
   float targetPxWidth = 0.75 * max(u_dpr, 1.0);
   float lineAlpha = 1.0 - smoothstep(targetPxWidth * 0.35, targetPxWidth * 0.95, pxDist);
 
-  // Living gradient palette (from specification):
-  // Bright cyan-blue: #008CB2 -> vec3(0.0, 140.0 / 255.0, 178.0 / 255.0)
-  // Deep blue:       #005879 -> vec3(0.0, 88.0 / 255.0, 121.0 / 255.0)
-  // Dark blue-green: #063B4B -> vec3(6.0 / 255.0, 59.0 / 255.0, 75.0 / 255.0)
-  vec3 colBright = vec3(0.0, 140.0 / 255.0, 178.0 / 255.0);
-  vec3 colDeep   = vec3(0.0, 88.0 / 255.0, 121.0 / 255.0);
-  vec3 colDark   = vec3(6.0 / 255.0, 59.0 / 255.0, 75.0 / 255.0);
+  // Final ink-friendly palette, built directly into the opaque background.
+  // No separate dark overlay is switched on when the About section enters.
+  vec3 colBright = vec3(0.0, 130.0 / 255.0, 167.0 / 255.0);
+  vec3 colDeep   = vec3(0.0, 85.0 / 255.0, 120.0 / 255.0);
+  vec3 colDark   = vec3(0.0, 48.0 / 255.0, 69.0 / 255.0);
 
   // Slow, meditative drift with natural period ~25-30 seconds (independent of scroll)
   float tGrad = u_time * 0.035;
@@ -81,27 +80,30 @@ void main() {
 
   // Base background distribution: lighter cyan-blue at top/sides, deep blue in middle, dark blue-green at bottom
   vec3 livingGradient = mix(colDark, colDeep, smoothstep(0.05, 0.75, uv.y));
-  float wBright = smoothstep(0.95, 0.15, d1) * 0.85 + smoothstep(0.3, 1.0, uv.y) * 0.25;
+  float wBright = (1.0 - smoothstep(0.15, 0.95, d1)) * 0.85 + smoothstep(0.3, 1.0, uv.y) * 0.25;
   livingGradient = mix(livingGradient, colBright, clamp(wBright + gradNoise * 0.15, 0.0, 1.0));
 
-  // Blend from pure white base to living gradient according to scroll progress (0.0 -> 1.0)
-  vec3 baseBg = mix(vec3(1.0, 1.0, 1.0), livingGradient, u_scrollProgress);
+  // Continuous colour transition with zero slope at both ends.
+  float colorProgress = smoothstep(0.0, 1.0, u_scrollProgress);
+  vec3 baseBg = mix(vec3(1.0), livingGradient, colorProgress);
 
   // Topographic lines:
   // - On white base: delicate, distinguishable cool gray (~#9CA8B0)
   // - On saturated dark gradient: low-contrast cyan-blue slightly lighter than background
   vec3 lineWhiteBg = vec3(156.0 / 255.0, 168.0 / 255.0, 176.0 / 255.0);
-  vec3 lineGradientBg = mix(livingGradient, colBright, 0.45);
-  vec3 lineColor = mix(lineWhiteBg, lineGradientBg, u_scrollProgress);
+  vec3 lineGradientBg = mix(livingGradient, vec3(0.58, 0.86, 0.93), 0.70);
+  vec3 lineColor = mix(lineWhiteBg, lineGradientBg, colorProgress);
 
   // Single clear line strength parameter (no compounding nested factors extinguishing lines)
   // White state: 0.40 strength -> soft legible 0.75px contour lines
-  // Dark state:  0.22 strength -> subtle low-contrast cyan-blue contours
-  float lineStrength = mix(0.40, 0.22, u_scrollProgress) * u_opacity;
+  // Blue state: 0.38 strength with a pale cyan target keeps contours visible.
+  float lineStrength = mix(0.40, 0.30, colorProgress) * u_opacity;
   float currentLineAlpha = lineAlpha * lineStrength;
 
   vec3 backgroundWithContours = mix(baseBg, lineColor, currentLineAlpha);
 
+  float liquid = texture(u_fluidMask, uv).r * (1.0 - smoothstep(0.0, 0.18, u_scrollProgress));
+  backgroundWithContours = mix(backgroundWithContours, vec3(0.86, 0.87, 0.88), liquid * u_opacity);
   fragColor = vec4(backgroundWithContours, 1.0);
 }
 `;
@@ -112,6 +114,7 @@ export class BackgroundField {
   private quadBuffer: WebGLBuffer;
   private program: WebGLProgram;
 
+  private locFluidMask: WebGLUniformLocation | null = null;
   private locResolution: WebGLUniformLocation | null = null;
   private locTime: WebGLUniformLocation | null = null;
   private locOpacity: WebGLUniformLocation | null = null;
@@ -125,6 +128,7 @@ export class BackgroundField {
     this.quadBuffer = quad.buffer;
 
     this.program = createProgram(gl, VS_COMPOSITE, FS_BACKGROUND_COMPOSITE);
+    this.locFluidMask = gl.getUniformLocation(this.program, 'u_fluidMask');
     this.locResolution = gl.getUniformLocation(this.program, 'u_resolution');
     this.locTime = gl.getUniformLocation(this.program, 'u_time');
     this.locOpacity = gl.getUniformLocation(this.program, 'u_opacity');
@@ -133,6 +137,7 @@ export class BackgroundField {
   }
 
   public render(
+    fluidMask: WebGLTexture | null,
     width: number,
     height: number,
     time: number,
@@ -145,6 +150,9 @@ export class BackgroundField {
     gl.useProgram(this.program);
     gl.bindVertexArray(this.quadVAO);
 
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, fluidMask);
+    gl.uniform1i(this.locFluidMask, 0);
     gl.uniform2f(this.locResolution, width, height);
     gl.uniform1f(this.locTime, time);
     gl.uniform1f(this.locOpacity, opacity);
